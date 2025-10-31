@@ -53,8 +53,8 @@ public class XrplService {
     @Value("${xrpl.issuer-address}")
     private String issuerAddress;
 
-    public XrplService(XrplClient client) {
-        this.client = client;
+    public XrplService() throws Exception {
+        this.client = new XrplClient(HttpUrl.get("https://s.altnet.rippletest.net:51234"));
     }
 
     // ---------------------------
@@ -119,9 +119,10 @@ public class XrplService {
         Address issuer = Address.of(issuerAddress);
         KeyPair keyPair = getHotWalletKeyPair();
 
-        // ✅ Always fetch fresh sequence before building
-        UnsignedInteger nextSeq = getSequence(issuer);
-        UnsignedInteger nextLedger = getLastLedgerSequence();
+        // fetch latest fee, sequence, and ledger info live from XRPL
+        XrpCurrencyAmount fee = getFee();
+        UnsignedInteger sequence = getSequence(issuer);
+        UnsignedInteger lastLedgerSequence = getLastLedgerSequence();
 
         IssuedCurrencyAmount issued = IssuedCurrencyAmount.builder()
                 .currency(currency)
@@ -129,16 +130,17 @@ public class XrplService {
                 .value(String.valueOf(amount))
                 .build();
 
-        Payment unsigned = Payment.builder()
+        Payment unsignedTx = Payment.builder()
                 .account(issuer)
-                .destination(issuer)
+                .destination(issuer) // self-send issuance
                 .amount(issued)
-                .fee(getFee())
-                .sequence(nextSeq)
-                .lastLedgerSequence(nextLedger)
+                .fee(fee)
+                .sequence(sequence)
+                .lastLedgerSequence(lastLedgerSequence)
                 .signingPublicKey(keyPair.publicKey())
                 .build();
 
+        // build unsigned JSON for frontend
         ObjectNode txJson = mapper.createObjectNode();
         txJson.put("TransactionType", "Payment");
         txJson.put("Account", issuer.value());
@@ -150,13 +152,15 @@ public class XrplService {
         amountNode.put("issuer", issuer.value());
         txJson.set("Amount", amountNode);
 
-        txJson.put("Fee", getFee().value().toString());
-        txJson.put("Sequence", nextSeq.intValue());
-        txJson.put("LastLedgerSequence", nextLedger.intValue());
+        txJson.put("Fee", fee.value().toString());
+        txJson.put("Sequence", sequence.intValue());
+        txJson.put("LastLedgerSequence", lastLedgerSequence.intValue());
         txJson.put("SigningPubKey", keyPair.publicKey().base16Value());
+        txJson.put("NetworkID", 21338); // testnet
 
-        return mapper.writeValueAsString(txJson);
+        return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(txJson);
     }
+
 
 
 
@@ -227,6 +231,7 @@ public class XrplService {
 
     public String broadcastSigned(String signedTxBlob) {
         try {
+            // 🔹 Build request for XRPL Testnet
             Map<String, Object> request = Map.of(
                     "method", "submit",
                     "params", List.of(Map.of("tx_blob", signedTxBlob))
@@ -237,24 +242,40 @@ public class XrplService {
 
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
 
-            ResponseEntity<Map> response = restTemplate.postForEntity(rippledRpcUrl, entity, Map.class);
+            // 🔹 Send request to XRPL Testnet (public endpoint)
+            ResponseEntity<Map> response = restTemplate.postForEntity(
+                    "https://s.altnet.rippletest.net:51234/",
+                    entity,
+                    Map.class
+            );
 
             Map<?, ?> body = response.getBody();
             if (body == null) {
-                throw new RuntimeException("Empty response from rippled node");
+                throw new RuntimeException("Empty response from XRPL node");
             }
 
             Map<?, ?> result = (Map<?, ?>) body.get("result");
-            if ("tesSUCCESS".equals(result.get("engine_result"))) {
-                Map<?, ?> txJson = (Map<?, ?>) result.get("tx_json");
-                return "Broadcast successful. Transaction hash: " + txJson.get("hash");
-            } else {
-                throw new RuntimeException("Broadcast failed: " + result.get("engine_result_message"));
+            if (result == null) {
+                throw new RuntimeException("No result field in XRPL response");
             }
+
+            // 🔹 Handle engine results
+            String engineResult = (String) result.get("engine_result");
+            String engineMessage = (String) result.get("engine_result_message");
+
+            if ("tesSUCCESS".equals(engineResult)) {
+                Map<?, ?> txJson = (Map<?, ?>) result.get("tx_json");
+                String txHash = txJson != null ? (String) txJson.get("hash") : "unknown";
+                return "✅ Broadcast successful. Transaction hash: " + txHash;
+            } else {
+                return "❌ Broadcast failed — " + engineResult + ": " + engineMessage;
+            }
+
         } catch (Exception e) {
             throw new RuntimeException("Broadcast failed: " + e.getMessage(), e);
         }
     }
+
 
 
 
@@ -270,3 +291,4 @@ public class XrplService {
         }
     }
 }
+
