@@ -15,15 +15,17 @@ public class AdminActionService {
     private final TokenOwnershipRepo ownershipRepo;
     private final XrplService xrplService;
     private final UserRepo userRepo;
+    private final WalletService walletService;
 
     public AdminActionService(TransactionRepo txRepo, WalletRepo walletRepo, PropertyRepo propertyRepo,
-                              TokenOwnershipRepo ownershipRepo, XrplService xrplService, UserRepo userRepo) {
+                              TokenOwnershipRepo ownershipRepo, XrplService xrplService, UserRepo userRepo, WalletService walletService) {
         this.txRepo = txRepo;
         this.walletRepo = walletRepo;
         this.propertyRepo = propertyRepo;
         this.ownershipRepo = ownershipRepo;
         this.xrplService = xrplService;
         this.userRepo = userRepo;
+        this.walletService = walletService;
     }
 
     public Transaction confirm(Long txId, Long adminId) throws Exception {
@@ -32,24 +34,31 @@ public class AdminActionService {
 
         User investor = userRepo.findById(tx.getUserId()).orElseThrow();
         Property property = propertyRepo.findByIdForUpdate(tx.getPropertyId()).orElseThrow();
-        Wallet wallet = walletRepo.findByUserId(investor.getId()).orElseThrow();
 
+        // ---- WALLET ----
+        Wallet wallet = walletRepo.findByUserId(investor.getId())
+                .orElseGet(() -> walletService.ensureWallet(investor, tx));
+
+        // ---- FUND XRP (testnet) ----
         if ("CUSTODIAL".equals(investor.getCustodyMode()) && !wallet.isFundedXrp()) {
-            String fundTx = xrplService.fundWallet(wallet.getAddress());
+            xrplService.fundWallet(wallet.getAddress());
             wallet.setFundedXrp(true);
             walletRepo.save(wallet);
         }
 
+        // ---- TRUSTLINE & TRANSFER ----
         xrplService.createTrustline(wallet.getAddress(), property.getTokenSymbol());
-        String transferTx = xrplService.transferTokens(wallet.getAddress(), property.getTokenSymbol(), tx.getTokens());
+        String txHash = xrplService.transferTokens(wallet.getAddress(),
+                property.getTokenSymbol(), tx.getTokens());
 
+        // ---- UPDATE OWNERSHIP ----
         property.setAvailableTokens(property.getAvailableTokens() - tx.getTokens());
         TokenOwnership own = ownershipRepo.findByUserIdAndPropertyId(investor.getId(), property.getId())
                 .orElse(new TokenOwnership());
         own.setTokens(own.getTokens() + tx.getTokens());
         ownershipRepo.save(own);
 
-        tx.setXrplTxHash(transferTx);
+        tx.setXrplTxHash(txHash);
         tx.setStatus(TransactionStatus.COMPLETED);
         txRepo.save(tx);
         return tx;
