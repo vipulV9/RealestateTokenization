@@ -1,6 +1,7 @@
 package com.product.RealestateTokenization.repository;
 
 import com.product.RealestateTokenization.model.Transaction;
+import com.product.RealestateTokenization.model.TransactionStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import jakarta.persistence.LockModeType;
@@ -16,7 +17,10 @@ public interface TransactionRepo extends JpaRepository<Transaction, Long> {
 
     Optional<Transaction> findByRazorpayPaymentId(String id);
 
-    List<Transaction> findByStatus(String status);
+//    List<Transaction> findByStatus(String status);
+     List<Transaction> findByStatus(TransactionStatus status);
+
+    Optional<Transaction> findByRazorpayOrderId(String razorpayOrderId);
 
     // ✅ Correct usage for pessimistic locking
     @Lock(LockModeType.PESSIMISTIC_WRITE)

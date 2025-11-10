@@ -3,6 +3,7 @@ package com.product.RealestateTokenization.service;
 import com.product.RealestateTokenization.util.CryptoUtil;
 import com.google.common.primitives.UnsignedInteger;
 import okhttp3.HttpUrl;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -35,11 +36,16 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import java.math.BigDecimal;
 import java.net.URI;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 @Service
 public class XrplService {
+
+    @Autowired
+    private CryptoUtil cryptoUtil;
+
 
     private final XrplClient client;
     private final SignatureService signatureService = new BcSignatureService();
@@ -64,7 +70,9 @@ public class XrplService {
         Seed seed = Seed.ed25519Seed();
         KeyPair keyPair = seed.deriveKeyPair();
         String address = keyPair.publicKey().deriveAddress().value();
-        String encrypted = CryptoUtil.encrypt(keyPair.privateKey().toString());
+        //String encrypted = CryptoUtil.encrypt(keyPair.privateKey().toString());
+        String encrypted = cryptoUtil.encrypt(keyPair.privateKey().toString());
+
         return new WalletInfo(address, encrypted);
     }
 
@@ -109,6 +117,8 @@ public class XrplService {
                 .unsignedIntegerValue();
     }
 
+
+
     // ---------------------------
     // FIXED: UNSIGNED ISSUANCE (self-send Payment) → JSON for offline signing
     // ---------------------------
@@ -123,6 +133,7 @@ public class XrplService {
         XrpCurrencyAmount fee = getFee();
         UnsignedInteger sequence = getSequence(issuer);
         UnsignedInteger lastLedgerSequence = getLastLedgerSequence();
+
 
         IssuedCurrencyAmount issued = IssuedCurrencyAmount.builder()
                 .currency(currency)
@@ -290,5 +301,99 @@ public class XrplService {
             return false;
         }
     }
+
+    public String createInvestorTrustLine(String investorSecret, String issuerAddress, String currencyCode, String limitAmount) {
+        try {
+            RestTemplate restTemplate = new RestTemplate();
+
+            Map<String, Object> tx = new HashMap<>();
+            tx.put("TransactionType", "TrustSet");
+            tx.put("Account", getAddressFromSecret(investorSecret));
+            tx.put("LimitAmount", Map.of(
+                    "currency", currencyCode,
+                    "issuer", issuerAddress,
+                    "value", limitAmount
+            ));
+            tx.put("Fee", "12");
+            tx.put("Flags", 131072); // tfSetNoRipple flag
+
+            Map<String, Object> request = new HashMap<>();
+            request.put("method", "submit");
+            request.put("params", List.of(Map.of(
+                    "secret", investorSecret,
+                    "tx_json", tx
+            )));
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
+
+            ResponseEntity<Map> response = restTemplate.postForEntity(
+                    "https://s.altnet.rippletest.net:51234/",
+                    entity,
+                    Map.class
+            );
+
+            Map<?, ?> result = (Map<?, ?>) ((Map<?, ?>) response.getBody()).get("result");
+            if (result == null) {
+                return "❌ No result from XRPL while creating trustline.";
+            }
+
+            String engineResult = (String) result.get("engine_result");
+            String engineMessage = (String) result.get("engine_result_message");
+
+            if ("tesSUCCESS".equals(engineResult)) {
+                return "✅ Investor trustline created successfully.";
+            } else if (engineResult.startsWith("tef") || engineResult.startsWith("tec")) {
+                return "⚠️ Trustline may already exist or insufficient reserve: " + engineMessage;
+            } else {
+                return "❌ Trustline failed: " + engineResult + " - " + engineMessage;
+            }
+        } catch (Exception e) {
+            return "❌ Trustline creation failed: " + e.getMessage();
+        }
+    }
+
+    private String getAddressFromSecret(String secret) {
+        try {
+            Seed seed = Seed.fromBase58EncodedSecret(Base58EncodedSecret.of(secret));
+            KeyPair keyPair = seed.deriveKeyPair();
+            return keyPair.publicKey().deriveAddress().value();
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to derive address from secret: " + e.getMessage());
+        }
+    }
+
+    public String transferTokensToInvestor(String investorAddress, String currencyCode, int amount) {
+        try {
+            KeyPair issuerKeys = getHotWalletKeyPair();
+            Address issuerAddr = Address.of(issuerAddress);
+
+            IssuedCurrencyAmount issued = IssuedCurrencyAmount.builder()
+                    .currency(currencyCode)
+                    .issuer(issuerAddr)
+                    .value(String.valueOf(amount))
+                    .build();
+
+            Payment payment = Payment.builder()
+                    .account(issuerAddr)
+                    .destination(Address.of(investorAddress))
+                    .amount(issued)
+                    .fee(getFee())
+                    .sequence(getSequence(issuerAddr))
+                    .signingPublicKey(issuerKeys.publicKey())
+                    .lastLedgerSequence(getLastLedgerSequence())
+                    .build();
+
+            SingleSignedTransaction<Payment> signedTx = signatureService.sign(issuerKeys.privateKey(), payment);
+            SubmitResult<Payment> result = client.submit(signedTx);
+            return  result.transactionResult().hash().value();
+        } catch (Exception e) {
+            return "❌ Token transfer failed: " + e.getMessage();
+        }
+    }
+
+
 }
 

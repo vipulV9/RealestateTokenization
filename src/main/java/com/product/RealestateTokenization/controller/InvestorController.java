@@ -78,6 +78,13 @@ public class InvestorController {
     }
 
 
+    @PostMapping("/webhook")
+    public ResponseEntity<String> handleWebhook(@RequestBody String payload,
+                                                @RequestHeader("X-Razorpay-Signature") String signatureHeader) {
+        String result = paymentService.handleWebhook(payload, signatureHeader);
+        return ResponseEntity.ok(result);
+    }
+
 
 
     @GetMapping("/wallet")
@@ -96,6 +103,9 @@ public class InvestorController {
         walletService.setInvestorAddress(req.userId(), req.address());
         return ResponseEntity.ok("Address saved");
     }
+
+
+
 }
 
 record OrderRequest(Long investorId, Long propertyId, int tokens, String idempotencyKey) {}

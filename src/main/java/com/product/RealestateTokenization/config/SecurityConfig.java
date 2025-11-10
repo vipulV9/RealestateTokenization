@@ -41,7 +41,8 @@ public class SecurityConfig {
                                 "/register",
                                 "/login",
                                 "/oauth2/authorization/google",
-                                "/login/oauth2/code/google"
+                                "/login/oauth2/code/google",
+                                "/investor/webhook"
                         ).permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/admin/**").hasRole("ADMIN")

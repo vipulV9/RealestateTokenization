@@ -1,5 +1,6 @@
 package com.product.RealestateTokenization.controller;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.product.RealestateTokenization.model.Property;
 import com.product.RealestateTokenization.model.Transaction;
 import com.product.RealestateTokenization.service.AdminActionService;
@@ -7,6 +8,7 @@ import com.product.RealestateTokenization.service.PropertyService;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -22,11 +24,35 @@ public class AdminController {
         this.adminService = adminService;
     }
 
-    @PostMapping("/properties")
-    public ResponseEntity<PropertyResponse> createProperty(@RequestBody PropertyCreateReq req) throws Exception {
-        Property p = propertyService.createPropertyWithUnsignedTx(req);
-        return ResponseEntity.ok(new PropertyResponse(p.getId()));
-    }
+//    @PostMapping("/properties")
+//    public ResponseEntity<PropertyResponse> createProperty(@RequestBody PropertyCreateReq req) throws Exception {
+//        Property p = propertyService.createPropertyWithUnsignedTx(req);
+//        return ResponseEntity.ok(new PropertyResponse(p.getId()));
+//    }
+@GetMapping("/properties")
+public List<Property> listProperties() {
+    return propertyService.getOnChainProperties();
+}
+
+@PostMapping(
+        value = "/properties",
+        consumes = { MediaType.MULTIPART_FORM_DATA_VALUE }
+)
+public ResponseEntity<PropertyResponse> createProperty(
+        @RequestPart("property") String propertyJson,
+        @RequestPart(value = "images", required = false) List<MultipartFile> images
+) throws Exception {
+
+    ObjectMapper mapper = new ObjectMapper();
+    PropertyCreateReq req = mapper.readValue(propertyJson, PropertyCreateReq.class);
+
+    Property property = propertyService.createPropertyWithUnsignedTx(req, images);
+    return ResponseEntity.ok(new PropertyResponse(property.getId()));
+}
+
+
+
+
 
     @GetMapping("/properties/{id}/download-unsigned")
     public ResponseEntity<ByteArrayResource> downloadUnsigned(@PathVariable Long id) {

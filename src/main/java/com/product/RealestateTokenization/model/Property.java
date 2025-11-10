@@ -7,6 +7,9 @@ import jakarta.persistence.*;
 import jakarta.persistence.*;
 import lombok.Data;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @Entity
 @Data
 public class Property {
@@ -16,9 +19,14 @@ public class Property {
     private int totalTokens, availableTokens;
     @Column(columnDefinition = "TEXT")
     private String unsignedTxBlob; // Stores unsigned JSON
+
+    @ElementCollection
+    @CollectionTable(name = "property_photos", joinColumns = @JoinColumn(name = "property_id"))
+    @Column(name = "photo_url")
+    private List<String> photoUrls = new ArrayList<>();
+
     public void setSpvId(String spvId) { this.spvId = spvId; }
     public void setTokenPrice(double price) { this.tokenPrice = price; }
     public double getTokenPrice() { return tokenPrice; }
-
 
 }

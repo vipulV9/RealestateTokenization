@@ -4,7 +4,9 @@ import com.product.RealestateTokenization.model.*;
 import com.product.RealestateTokenization.repository.*;
 import com.razorpay.Order;
 import com.razorpay.RazorpayClient;
+import com.razorpay.Utils;
 import org.json.JSONObject;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -200,4 +202,67 @@ public class PaymentService {
 
         return response;
     }
+
+
+
+    @Value("${razorpay.webhook.secret}")
+    private String webhookSecret;
+
+    public String handleWebhook(String payload, String signatureHeader) {
+        try {
+            // ✅ Verify Razorpay signature
+            boolean isValid = Utils.verifyWebhookSignature(payload, signatureHeader, webhookSecret);
+            if (!isValid) {
+                return "Invalid Signature";
+            }
+
+            JSONObject event = new JSONObject(payload);
+            String eventType = event.getString("event");
+
+            if (eventType.equals("payment.captured")) {
+                JSONObject payment = event.getJSONObject("payload")
+                        .getJSONObject("payment")
+                        .getJSONObject("entity");
+
+                String orderId = payment.getString("order_id");
+                String paymentId = payment.getString("id");
+                double amount = payment.getDouble("amount") / 100.0;
+
+                // ✅ Fetch transaction safely using Optional
+                Transaction txn = txRepo.findByRazorpayOrderId(orderId).orElse(null);
+
+                if (txn != null) {
+                    txn.setRazorpayPaymentId(paymentId);
+                    txn.setStatus(TransactionStatus.PAYMENT_RECEIVED_PENDING_ADMIN);
+                    txn.setAmount(amount);
+                    txRepo.save(txn);
+                    return "✅ Payment Captured and Updated";
+                } else {
+                    return "⚠️ Transaction not found for order_id: " + orderId;
+                }
+
+            } else if (eventType.equals("payment.failed")) {
+                JSONObject payment = event.getJSONObject("payload")
+                        .getJSONObject("payment")
+                        .getJSONObject("entity");
+
+                String orderId = payment.getString("order_id");
+
+                Transaction txn = txRepo.findByRazorpayOrderId(orderId).orElse(null);
+
+                if (txn != null) {
+                    txn.setStatus(TransactionStatus.FAILED);
+                    txRepo.save(txn);
+                }
+                return "❌ Payment Failed Updated";
+            }
+
+            return "Unhandled Event: " + eventType;
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return "Webhook Error: " + e.getMessage();
+        }
+    }
+
 }
