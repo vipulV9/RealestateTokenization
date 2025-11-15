@@ -50,12 +50,15 @@ public class AdminActionService {
             walletRepo.save(wallet);
         }
 
-        // ---------------------------------------------------------
-        // ONLY TRUSTLINE NEEDED → Investor must trust Cold Wallet
-        // ---------------------------------------------------------
+        // ✅ NEW: Ensure HOT wallet has trustline to COLD wallet (issuer)
+        String hotTl = xrplService.createHotWalletTrustLine(property.getTokenSymbol());
+        System.out.println("Hot wallet trustline = " + hotTl);
+
+
+        // ✅ Investor must trust HOT WALLET (the sender)
         String investorTl = xrplService.createInvestorTrustLine(
                 wallet.getSecretEncrypted(),
-                xrplService.getColdWalletAddress(),        // ISSUER = COLD WALLET
+                xrplService.getHotWalletAddress(),
                 property.getTokenSymbol(),
                 "10000000000"
         );
@@ -65,11 +68,6 @@ public class AdminActionService {
         if (!investorTl.contains("Hash")) {
             throw new RuntimeException("Investor trustline failed: " + investorTl);
         }
-
-        // ---------------------------------------------------------
-        // ❌ REMOVE Hot Wallet trustline completely — NOT REQUIRED
-        // DO NOT create trustline for hot wallet
-        // ---------------------------------------------------------
 
         // ---- TRANSFER TOKENS ----
         String txHash = xrplService.transferTokensToInvestor(
@@ -100,7 +98,6 @@ public class AdminActionService {
 
         return tx;
     }
-
 
 
     public Transaction reject(Long id) {

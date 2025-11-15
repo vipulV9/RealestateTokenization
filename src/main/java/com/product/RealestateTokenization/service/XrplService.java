@@ -188,7 +188,7 @@ public class XrplService {
 // ---------------------------
     public String generateUnsignedIssuance(String currency, int amount) throws Exception {
         Address issuer = Address.of(issuerAddress);
-        Address coldWallet = Address.of(coldWalletAddress); // <-- use cold wallet as destination
+        Address hotWallet = Address.of(hotWalletAddress); // ✅ Keep this for hot wallet
 
         // Use autofill to get fresh values (extra ledger window + fee multiplier)
         Map<String, Object> auto = autofillForAccount(issuer, DEFAULT_EXTRA_LEDGERS, DEFAULT_FEE_MULTIPLIER);
@@ -205,7 +205,7 @@ public class XrplService {
         // Build unsigned Payment object (do NOT put signingPublicKey here)
         Payment unsignedTx = Payment.builder()
                 .account(issuer)
-                .destination(coldWallet) // <-- send issuance to cold wallet
+                .destination(hotWallet) // ✅ Send to hot wallet
                 .amount(issued)
                 .fee(XrpCurrencyAmount.ofDrops(feeDrops))
                 .sequence(sequence)
@@ -216,7 +216,7 @@ public class XrplService {
         ObjectNode txJson = mapper.createObjectNode();
         txJson.put("TransactionType", "Payment");
         txJson.put("Account", issuer.value());
-        txJson.put("Destination", coldWallet.value()); // <-- cold wallet in JSON
+        txJson.put("Destination", hotWallet.value()); // ✅ CHANGED: Use hotWallet, not coldWallet
 
         ObjectNode amountNode = mapper.createObjectNode();
         amountNode.put("currency", currency);
@@ -312,6 +312,7 @@ public class XrplService {
 
             // COLD wallet is issuer
             Address issuer = Address.of(coldWalletAddress);
+            Address investor = Address.of(investorAddress);
 
             // Autofill
             Map<String, Object> auto = autofillForAccount(
@@ -324,18 +325,26 @@ public class XrplService {
             UnsignedInteger sequence = (UnsignedInteger) auto.get("sequence");
             UnsignedInteger lastLedgerSequence = (UnsignedInteger) auto.get("lastLedgerSequence");
 
-            // Correct issued currency
+            // ✅ CORRECT issued currency
             IssuedCurrencyAmount issued = IssuedCurrencyAmount.builder()
                     .currency(currencyCode)
-                    .issuer(issuer)  // <-- REAL ISSUER = COLD WALLET
+                    .issuer(issuer)  // COLD WALLET (token issuer)
+                    .value(String.valueOf(amount))
+                    .build();
+
+            // ✅ KEY FIX: Add DeliverMin (same as Amount for direct transfer)
+            IssuedCurrencyAmount deliverMin = IssuedCurrencyAmount.builder()
+                    .currency(currencyCode)
+                    .issuer(issuer)
                     .value(String.valueOf(amount))
                     .build();
 
             // Payment from HOT to investor
             Payment payment = Payment.builder()
                     .account(hot)                         // sender = hot wallet
-                    .destination(Address.of(investorAddress))
+                    .destination(investor)
                     .amount(issued)
+                    .deliverMin(deliverMin)              // ✅ ADD THIS
                     .fee(XrpCurrencyAmount.ofDrops(feeDrops))
                     .sequence(sequence)
                     .lastLedgerSequence(lastLedgerSequence)
@@ -582,10 +591,11 @@ public class XrplService {
     public String getIssuerAddressString() {
         return issuerAddress;
     }
+
     public String createHotWalletTrustLine(String currencyCode) {
         return createInvestorTrustLine(
-                hotWalletSeed,
-                coldWalletAddress,       // issuer = cold wallet
+                hotWalletSeed,              // Hot wallet secret
+                coldWalletAddress,          // ✅ Trust the COLD wallet (issuer)
                 currencyCode,
                 "10000000000"
         );
