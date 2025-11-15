@@ -30,87 +30,77 @@ public class AdminActionService {
         this.walletService = walletService;
     }
 
-//    public Transaction confirm(Long txId, Long adminId) throws Exception {
-//        Transaction tx = txRepo.findByIdForUpdate(txId).orElseThrow();
-//        if (tx.getStatus() == TransactionStatus.COMPLETED) return tx;
-//
-//        User investor = userRepo.findById(tx.getUserId()).orElseThrow();
-//        Property property = propertyRepo.findByIdForUpdate(tx.getPropertyId()).orElseThrow();
-//
-//        // ---- WALLET ----
-//        Wallet wallet = walletRepo.findByUserId(investor.getId())
-//                .orElseGet(() -> walletService.ensureWallet(investor, tx));
-//
-//        // ---- FUND XRP (testnet) ----
-//        if ("CUSTODIAL".equals(investor.getCustodyMode()) && !wallet.isFundedXrp()) {
-//            xrplService.fundWallet(wallet.getAddress());
-//            wallet.setFundedXrp(true);
-//            walletRepo.save(wallet);
-//        }
-//
-//        // ---- TRUSTLINE & TRANSFER ----
-//        xrplService.createTrustline(wallet.getAddress(), property.getTokenSymbol());
-//        String txHash = xrplService.transferTokens(wallet.getAddress(),
-//                property.getTokenSymbol(), tx.getTokens());
-//
-//        // ---- UPDATE OWNERSHIP ----
-//        property.setAvailableTokens(property.getAvailableTokens() - tx.getTokens());
-//        TokenOwnership own = ownershipRepo.findByUserIdAndPropertyId(investor.getId(), property.getId())
-//                .orElse(new TokenOwnership());
-//        own.setTokens(own.getTokens() + tx.getTokens());
-//        ownershipRepo.save(own);
-//
-//        tx.setXrplTxHash(txHash);
-//        tx.setStatus(TransactionStatus.COMPLETED);
-//        txRepo.save(tx);
-//        return tx;
-//    }
-@Transactional
-public Transaction confirm(Long txId, Long adminId) throws Exception {
-    Transaction tx = txRepo.findByIdForUpdate(txId).orElseThrow();
-    if (tx.getStatus() == TransactionStatus.COMPLETED) return tx;
+    @Transactional
+    public Transaction confirm(Long txId, Long adminId) throws Exception {
 
-    User investor = userRepo.findById(tx.getUserId()).orElseThrow();
-    Property property = propertyRepo.findByIdForUpdate(tx.getPropertyId()).orElseThrow();
+        Transaction tx = txRepo.findByIdForUpdate(txId).orElseThrow();
+        if (tx.getStatus() == TransactionStatus.COMPLETED) return tx;
 
-    // ---- WALLET ----
-    Wallet wallet = walletRepo.findByUserId(investor.getId())
-            .orElseGet(() -> walletService.ensureWallet(investor, tx));
+        User investor = userRepo.findById(tx.getUserId()).orElseThrow();
+        Property property = propertyRepo.findByIdForUpdate(tx.getPropertyId()).orElseThrow();
 
-    // ---- FUND XRP (testnet) ----
-    if ("CUSTODIAL".equals(investor.getCustodyMode()) && !wallet.isFundedXrp()) {
-        xrplService.fundWallet(wallet.getAddress());
-        wallet.setFundedXrp(true);
-        walletRepo.save(wallet);
+        // ---- WALLET ----
+        Wallet wallet = walletRepo.findByUserId(investor.getId())
+                .orElseGet(() -> walletService.ensureWallet(investor, tx));
+
+        // ---- FUND XRP (testnet) ----
+        if ("CUSTODIAL".equals(investor.getCustodyMode()) && !wallet.isFundedXrp()) {
+            xrplService.fundWallet(wallet.getAddress());
+            wallet.setFundedXrp(true);
+            walletRepo.save(wallet);
+        }
+
+        // ---------------------------------------------------------
+        // ONLY TRUSTLINE NEEDED → Investor must trust Cold Wallet
+        // ---------------------------------------------------------
+        String investorTl = xrplService.createInvestorTrustLine(
+                wallet.getSecretEncrypted(),
+                xrplService.getColdWalletAddress(),        // ISSUER = COLD WALLET
+                property.getTokenSymbol(),
+                "10000000000"
+        );
+
+        System.out.println("Investor trustline = " + investorTl);
+
+        if (!investorTl.contains("Hash")) {
+            throw new RuntimeException("Investor trustline failed: " + investorTl);
+        }
+
+        // ---------------------------------------------------------
+        // ❌ REMOVE Hot Wallet trustline completely — NOT REQUIRED
+        // DO NOT create trustline for hot wallet
+        // ---------------------------------------------------------
+
+        // ---- TRANSFER TOKENS ----
+        String txHash = xrplService.transferTokensToInvestor(
+                wallet.getAddress(),
+                property.getTokenSymbol(),
+                tx.getTokens()
+        );
+
+        System.out.println("Token transfer hash = " + txHash);
+
+        // ---- UPDATE OWNERSHIP ----
+        property.setAvailableTokens(property.getAvailableTokens() - tx.getTokens());
+
+        TokenOwnership own = ownershipRepo.findByUserIdAndPropertyId(investor.getId(), property.getId())
+                .orElse(new TokenOwnership());
+
+        if (own.getPropertyId() == null) own.setPropertyId(property.getId());
+        if (own.getUserId() == null) own.setUserId(investor.getId());
+
+        own.setTokens(own.getTokens() + tx.getTokens());
+        ownershipRepo.save(own);
+
+        // ---- UPDATE TRANSACTION ----
+        tx.setXrplTxHash(txHash);
+        tx.setStatus(TransactionStatus.COMPLETED);
+        txRepo.save(tx);
+        propertyRepo.save(property);
+
+        return tx;
     }
 
-    // ---- TRUSTLINE & TRANSFER ----
-    xrplService.createTrustline(wallet.getAddress(), property.getTokenSymbol());
-    String txHash = xrplService.transferTokens(wallet.getAddress(),
-            property.getTokenSymbol(), tx.getTokens());
-
-    // ---- UPDATE OWNERSHIP ----
-    property.setAvailableTokens(property.getAvailableTokens() - tx.getTokens());
-
-    TokenOwnership own = ownershipRepo.findByUserIdAndPropertyId(investor.getId(), property.getId())
-            .orElse(new TokenOwnership());
-
-    // ✅ Ensure ownership has both foreign keys set
-    if (own.getPropertyId() == null) own.setPropertyId(property.getId());
-    if (own.getUserId() == null) own.setUserId(investor.getId());
-
-    // ✅ Add or update token count
-    own.setTokens(own.getTokens() + tx.getTokens());
-    ownershipRepo.save(own);
-
-    // ---- UPDATE TRANSACTION ----
-    tx.setXrplTxHash(txHash);
-    tx.setStatus(TransactionStatus.COMPLETED);
-    txRepo.save(tx);
-
-    propertyRepo.save(property);
-    return tx;
-}
 
 
     public Transaction reject(Long id) {

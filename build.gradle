@@ -49,8 +49,12 @@ dependencies {
 	implementation 'com.cloudinary:cloudinary-http44:1.34.0'
 
 	// === XRPL (Ripple) ===
-	implementation 'org.xrpl:xrpl4j-client:3.3.1'
-	implementation 'org.xrpl:xrpl4j-core:3.3.1'
+	//implementation 'org.xrpl:xrpl4j-client:3.3.1'
+	//implementation 'org.xrpl:xrpl4j-core:3.3.1'
+// For Gradle
+	implementation 'org.xrpl:xrpl4j-client:5.1.0'
+	implementation 'org.xrpl:xrpl4j-core:5.1.0'
+// You may also need:
 	implementation 'io.github.cdimascio:java-dotenv:5.2.2'
 
 
