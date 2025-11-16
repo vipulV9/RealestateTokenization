@@ -5,6 +5,8 @@ import com.product.RealestateTokenization.model.Property;
 import com.product.RealestateTokenization.model.Transaction;
 import com.product.RealestateTokenization.service.AdminActionService;
 import com.product.RealestateTokenization.service.PropertyService;
+import com.product.RealestateTokenization.service.XrplService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
@@ -16,6 +18,8 @@ import java.util.List;
 @RequestMapping("/admin")
 public class AdminController {
 
+    @Autowired
+    XrplService xrplService;
     private final PropertyService propertyService;
     private final AdminActionService adminService;
 
@@ -99,6 +103,22 @@ public ResponseEntity<PropertyResponse> createProperty(
     @PostMapping("/transactions/{id}/reject")
     public Transaction reject(@PathVariable Long id) {
         return adminService.reject(id);
+    }
+    @GetMapping("/issuer/set-default-ripple/download-unsigned")
+    public ResponseEntity<ByteArrayResource> downloadUnsignedDefaultRipple() throws Exception {
+        String unsignedJson = xrplService.generateUnsignedDefaultRipple();
+        byte[] jsonBytes = unsignedJson.getBytes();
+        ByteArrayResource resource = new ByteArrayResource(jsonBytes);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=unsigned_default_ripple.json")
+                .contentType(MediaType.APPLICATION_JSON)
+                .contentLength(jsonBytes.length)
+                .body(resource);
+    }
+    @PostMapping("/issuer/set-default-ripple/upload-signed")
+    public ResponseEntity<String> uploadSignedDefaultRipple(@RequestBody SignedTxUploadReq req) throws Exception {
+        String result = xrplService.broadcastSigned(req.signedTxBlob());
+        return ResponseEntity.ok(result);
     }
 }
 

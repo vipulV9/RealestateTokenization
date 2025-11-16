@@ -2,6 +2,7 @@ package com.product.RealestateTokenization.service;
 
 import com.product.RealestateTokenization.model.*;
 import com.product.RealestateTokenization.repository.*;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,58 +31,91 @@ public class AdminActionService {
         this.walletService = walletService;
     }
 
+    @Value("${xrpl.cold-wallet-address}")
+    private String coldWalletAddress;
+
+
     @Transactional
     public Transaction confirm(Long txId, Long adminId) throws Exception {
 
-        Transaction tx = txRepo.findByIdForUpdate(txId).orElseThrow();
-        if (tx.getStatus() == TransactionStatus.COMPLETED) return tx;
+        // ---- VALIDATE DB INTEGRITY ----
+        Transaction tx = txRepo.findByIdForUpdate(txId)
+                .orElseThrow(() -> new RuntimeException("❌ Transaction not found: " + txId));
 
-        User investor = userRepo.findById(tx.getUserId()).orElseThrow();
-        Property property = propertyRepo.findByIdForUpdate(tx.getPropertyId()).orElseThrow();
+        User investor = userRepo.findById(tx.getUserId())
+                .orElseThrow(() -> new RuntimeException("❌ Investor not found: " + tx.getUserId()));
 
-        // ---- WALLET ----
-        Wallet wallet = walletRepo.findByUserId(investor.getId())
-                .orElseGet(() -> walletService.ensureWallet(investor, tx));
+        Property property = propertyRepo.findByIdForUpdate(tx.getPropertyId())
+                .orElseThrow(() -> new RuntimeException("❌ Property not found: " + tx.getPropertyId()));
 
-        // ---- FUND XRP (testnet) ----
+        String token = property.getTokenSymbol();
+        System.out.println("🚀 Token being transferred = " + token);
+
+        // ---- ENSURE WALLET EXISTS ----
+        Wallet wallet = walletRepo.findByUserId(investor.getId()).orElse(null);
+
+        if (wallet == null) {
+            wallet = walletService.ensureWallet(investor, tx);
+            walletRepo.save(wallet);     // <-- REQUIRED
+        }
+
+
+        // ---- ENSURE XRP RESERVE ----
         if ("CUSTODIAL".equals(investor.getCustodyMode()) && !wallet.isFundedXrp()) {
             xrplService.fundWallet(wallet.getAddress());
             wallet.setFundedXrp(true);
             walletRepo.save(wallet);
         }
 
-        // ✅ NEW: Ensure HOT wallet has trustline to COLD wallet (issuer)
-        String hotTl = xrplService.createHotWalletTrustLine(property.getTokenSymbol());
-        System.out.println("Hot wallet trustline = " + hotTl);
+        // ---- DECRYPT SECRET ----
+        String rawSecret = wallet.getSecretEncrypted();
+        // OR if Base64: String rawSecret = new String(Base64.getDecoder().decode(wallet.getSecretEncrypted()));
 
-
-        // ✅ Investor must trust HOT WALLET (the sender)
-        String investorTl = xrplService.createInvestorTrustLine(
-                wallet.getSecretEncrypted(),
-                xrplService.getHotWalletAddress(),
-                property.getTokenSymbol(),
-                "10000000000"
+        // ---- CHECK TRUSTLINE ----
+        boolean hasTL = xrplService.investorHasTrustline(
+                wallet.getAddress(),
+                xrplService.getIssuerAddressString(),
+                token
         );
 
-        System.out.println("Investor trustline = " + investorTl);
+        if (!hasTL) {
+            String tl = xrplService.createInvestorTrustLine(
+                    rawSecret,
+                    xrplService.getIssuerAddressString(),
+                    token,
+                    "10000000000"
+            );
 
-        if (!investorTl.contains("Hash")) {
-            throw new RuntimeException("Investor trustline failed: " + investorTl);
+            if (!tl.contains("Hash")) {
+                throw new RuntimeException("❌ Investor Trustline failed: " + tl);
+            }
         }
+        xrplService.clearNoRippleOnTrustline(
+                xrplService.getColdWalletSecret(),     // ← COLD secret
+                xrplService.getHotWalletAddress(),     // ← counterparty = Hot wallet
+                "VIP",
+                "0"                                    // ← keep limit 0 on Cold side (normal for issuer)
+        );
+        String clearResult = xrplService.clearNoRippleOnTrustline(rawSecret, coldWalletAddress, token, "10000000000");
+        if (!clearResult.contains("OK")) {
+            throw new RuntimeException("❌ Clear NoRipple failed: " + clearResult);
+        }
+        System.out.println("Investor wallet address = " + wallet.getAddress());
+        System.out.println("Token = " + token);
+        System.out.println("Amount = " + tx.getTokens());
 
-        // ---- TRANSFER TOKENS ----
-        String txHash = xrplService.transferTokensToInvestor(
+        // ---- TRANSFER ----
+        String txHash = xrplService.transferTokens(
                 wallet.getAddress(),
-                property.getTokenSymbol(),
+                token,
                 tx.getTokens()
         );
 
-        System.out.println("Token transfer hash = " + txHash);
-
-        // ---- UPDATE OWNERSHIP ----
+        // ---- UPDATE DB ----
         property.setAvailableTokens(property.getAvailableTokens() - tx.getTokens());
 
-        TokenOwnership own = ownershipRepo.findByUserIdAndPropertyId(investor.getId(), property.getId())
+        TokenOwnership own = ownershipRepo
+                .findByUserIdAndPropertyId(investor.getId(), property.getId())
                 .orElse(new TokenOwnership());
 
         if (own.getPropertyId() == null) own.setPropertyId(property.getId());
@@ -90,14 +124,16 @@ public class AdminActionService {
         own.setTokens(own.getTokens() + tx.getTokens());
         ownershipRepo.save(own);
 
-        // ---- UPDATE TRANSACTION ----
         tx.setXrplTxHash(txHash);
         tx.setStatus(TransactionStatus.COMPLETED);
+
         txRepo.save(tx);
         propertyRepo.save(property);
 
         return tx;
     }
+
+
 
 
     public Transaction reject(Long id) {

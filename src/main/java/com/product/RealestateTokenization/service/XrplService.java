@@ -1,5 +1,6 @@
 package com.product.RealestateTokenization.service;
 
+import com.google.common.primitives.UnsignedLong;
 import com.product.RealestateTokenization.util.CryptoUtil;
 import com.google.common.primitives.UnsignedInteger;
 import okhttp3.HttpUrl;
@@ -22,8 +23,7 @@ import org.xrpl.xrpl4j.crypto.keys.Seed;
 import org.xrpl.xrpl4j.crypto.signing.SignatureService;
 import org.xrpl.xrpl4j.crypto.signing.bc.BcSignatureService;
 import org.xrpl.xrpl4j.crypto.signing.SingleSignedTransaction;
-import org.xrpl.xrpl4j.model.client.accounts.AccountInfoRequestParams;
-import org.xrpl.xrpl4j.model.client.accounts.AccountInfoResult;
+import org.xrpl.xrpl4j.model.client.accounts.*;
 import org.xrpl.xrpl4j.model.client.common.LedgerIndex;
 import org.xrpl.xrpl4j.model.client.common.LedgerSpecifier;
 import org.xrpl.xrpl4j.model.client.fees.FeeResult;
@@ -40,6 +40,7 @@ import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @Service
 public class XrplService {
@@ -49,14 +50,19 @@ public class XrplService {
     @Value("${xrpl.hot-wallet-address}")
     private String hotWalletAddress;
 
-    @Value("${xrpl.cold-wallet-seed}")
-    private String coldWalletSeed;
 
     @Value("${xrpl.cold-wallet-address}")
     private String coldWalletAddress;
 
     @Value("${xrpl.issuer-address}")
     private String issuerAddress;
+
+    @Value("${xrpl.cold-wallet-seed}")
+    private String coldWalletSeed;
+
+    @Value("${xrpl.issuer-address}")
+    private String issuerAddressString;
+
 
     @Autowired
     private CryptoUtil cryptoUtil;
@@ -80,6 +86,19 @@ public class XrplService {
     public XrplService() throws Exception {
         this.client = new XrplClient(HttpUrl.get("https://s.altnet.rippletest.net:51234"));
     }
+    public KeyPair getColdWalletKeyPair() {
+        try {
+            Seed seed = Seed.fromBase58EncodedSecret(Base58EncodedSecret.of(coldWalletSeed));
+            return seed.deriveKeyPair();
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to load cold wallet keypair: " + e.getMessage());
+        }
+    }
+    public Address getColdAddress() {
+        return Address.of(issuerAddressString);
+    }
+
+
 
     // ---------------------------
     // WALLET CREATION & FUNDING
@@ -98,6 +117,7 @@ public class XrplService {
 
         String address = (String) result.get("address");
         String seed = (String) result.get("seed");
+
 
         return new WalletInfo(address, seed);
     }
@@ -187,50 +207,48 @@ public class XrplService {
 // UNSIGNED ISSUANCE (Payment)
 // ---------------------------
     public String generateUnsignedIssuance(String currency, int amount) throws Exception {
-        Address issuer = Address.of(issuerAddress);
-        Address hotWallet = Address.of(hotWalletAddress); // ✅ Keep this for hot wallet
 
-        // Use autofill to get fresh values (extra ledger window + fee multiplier)
-        Map<String, Object> auto = autofillForAccount(issuer, DEFAULT_EXTRA_LEDGERS, DEFAULT_FEE_MULTIPLIER);
+        Address cold = Address.of(issuerAddress);       // COLD wallet (issuer)
+        Address hot  = Address.of(hotWalletAddress);    // HOT wallet (distribution)
+
+        Map<String, Object> auto = autofillForAccount(cold, DEFAULT_EXTRA_LEDGERS, DEFAULT_FEE_MULTIPLIER);
         long feeDrops = (long) auto.get("feeDrops");
         UnsignedInteger sequence = (UnsignedInteger) auto.get("sequence");
         UnsignedInteger lastLedgerSequence = (UnsignedInteger) auto.get("lastLedgerSequence");
 
         IssuedCurrencyAmount issued = IssuedCurrencyAmount.builder()
                 .currency(currency)
-                .issuer(issuer)
+                .issuer(cold)                     // issuer = COLD
                 .value(String.valueOf(amount))
                 .build();
 
-        // Build unsigned Payment object (do NOT put signingPublicKey here)
         Payment unsignedTx = Payment.builder()
-                .account(issuer)
-                .destination(hotWallet) // ✅ Send to hot wallet
+                .account(cold)                    // COLD sends
+                .destination(hot)                 // HOT receives
                 .amount(issued)
                 .fee(XrpCurrencyAmount.ofDrops(feeDrops))
                 .sequence(sequence)
                 .lastLedgerSequence(lastLedgerSequence)
                 .build();
 
-        // build unsigned JSON for frontend / offline signing
         ObjectNode txJson = mapper.createObjectNode();
         txJson.put("TransactionType", "Payment");
-        txJson.put("Account", issuer.value());
-        txJson.put("Destination", hotWallet.value()); // ✅ CHANGED: Use hotWallet, not coldWallet
+        txJson.put("Account", cold.value());
+        txJson.put("Destination", hot.value());
 
-        ObjectNode amountNode = mapper.createObjectNode();
-        amountNode.put("currency", currency);
-        amountNode.put("value", String.valueOf(amount));
-        amountNode.put("issuer", issuer.value());
-        txJson.set("Amount", amountNode);
+        ObjectNode amt = mapper.createObjectNode();
+        amt.put("currency", currency);
+        amt.put("value", String.valueOf(amount));
+        amt.put("issuer", cold.value());
+        txJson.set("Amount", amt);
 
         txJson.put("Fee", String.valueOf(feeDrops));
         txJson.put("Sequence", sequence.intValue());
         txJson.put("LastLedgerSequence", lastLedgerSequence.intValue());
 
-        // IMPORTANT: do NOT include SigningPubKey or NetworkID here — signer adds them
         return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(txJson);
     }
+
 
 
     // ---------------------------
@@ -275,34 +293,56 @@ public class XrplService {
      * Server-signed transfer: autofill before building and signing the Payment to avoid stale sequence/fee.
      */
     public String transferTokens(String to, String currency, int amount) throws Exception {
-        KeyPair issuerKeys = getHotWalletKeyPair();
-        Address hot = getHotAddress();
 
-        Map<String, Object> auto = autofillForAccount(hot, DEFAULT_EXTRA_LEDGERS / 2, DEFAULT_FEE_MULTIPLIER); // slightly smaller window for server-signed
+        KeyPair hotKeys = getHotWalletKeyPair();
+        Address hot = getHotAddress();        // HOT WALLET
+        Address cold = getColdAddress();      // ISSUER
+
+        Map<String, Object> auto = autofillForAccount(hot, DEFAULT_EXTRA_LEDGERS, DEFAULT_FEE_MULTIPLIER);
         long feeDrops = (long) auto.get("feeDrops");
         UnsignedInteger sequence = (UnsignedInteger) auto.get("sequence");
         UnsignedInteger lastLedgerSequence = (UnsignedInteger) auto.get("lastLedgerSequence");
 
         IssuedCurrencyAmount issued = IssuedCurrencyAmount.builder()
                 .currency(currency)
-                .issuer(Address.of(issuerAddress))
+//                .issuer(Address.of("rGnooWaCofdywJsg7GwTjPtpk7HdoBy7qg"))   // issuer = COLD
+                .issuer(cold)
+
                 .value(String.valueOf(amount))
                 .build();
+        System.out.println("---- DEBUG VIP TRANSFER ----");
+        System.out.println("HOT Wallet Address : " + hot);
+        System.out.println("COLD Issuer Address: " + cold);
+        System.out.println("Destination (Investor): " + to);
+        System.out.println("Currency: " + currency);
+        System.out.println("Amount: " + amount);
+        System.out.println("-----------------------------");
 
         Payment payment = Payment.builder()
-                .account(hot)
-                .destination(Address.of(to))
+                .account(hot)                        // HOT sends
+                .destination(Address.of(to))         // investor receives
                 .amount(issued)
                 .fee(XrpCurrencyAmount.ofDrops(feeDrops))
                 .sequence(sequence)
-                .signingPublicKey(issuerKeys.publicKey())
+                .signingPublicKey(hotKeys.publicKey())
                 .lastLedgerSequence(lastLedgerSequence)
                 .build();
 
-        SingleSignedTransaction<Payment> signedTx = signatureService.sign(issuerKeys.privateKey(), payment);
-        SubmitResult<Payment> result = client.submit(signedTx);
+
+        SingleSignedTransaction<Payment> signed = signatureService.sign(hotKeys.privateKey(), payment);
+
+        SubmitResult<Payment> result = client.submit(signed);
+
+        if (!"tesSUCCESS".equals(result.engineResult())) {
+            throw new RuntimeException("XRPL Transfer FAILED: "
+                    + result.engineResult() + " - " + result.engineResultMessage());
+        }
+
         return result.transactionResult().hash().value();
     }
+
+
+
 
     public String transferTokensToInvestor(String investorAddress, String currencyCode, int amount) {
         try {
@@ -312,7 +352,6 @@ public class XrplService {
 
             // COLD wallet is issuer
             Address issuer = Address.of(coldWalletAddress);
-            Address investor = Address.of(investorAddress);
 
             // Autofill
             Map<String, Object> auto = autofillForAccount(
@@ -325,26 +364,18 @@ public class XrplService {
             UnsignedInteger sequence = (UnsignedInteger) auto.get("sequence");
             UnsignedInteger lastLedgerSequence = (UnsignedInteger) auto.get("lastLedgerSequence");
 
-            // ✅ CORRECT issued currency
+            // Correct issued currency
             IssuedCurrencyAmount issued = IssuedCurrencyAmount.builder()
                     .currency(currencyCode)
-                    .issuer(issuer)  // COLD WALLET (token issuer)
-                    .value(String.valueOf(amount))
-                    .build();
-
-            // ✅ KEY FIX: Add DeliverMin (same as Amount for direct transfer)
-            IssuedCurrencyAmount deliverMin = IssuedCurrencyAmount.builder()
-                    .currency(currencyCode)
-                    .issuer(issuer)
+                    .issuer(issuer)  // <-- REAL ISSUER = COLD WALLET
                     .value(String.valueOf(amount))
                     .build();
 
             // Payment from HOT to investor
             Payment payment = Payment.builder()
                     .account(hot)                         // sender = hot wallet
-                    .destination(investor)
+                    .destination(Address.of(investorAddress))
                     .amount(issued)
-                    .deliverMin(deliverMin)              // ✅ ADD THIS
                     .fee(XrpCurrencyAmount.ofDrops(feeDrops))
                     .sequence(sequence)
                     .lastLedgerSequence(lastLedgerSequence)
@@ -424,6 +455,44 @@ public class XrplService {
     // ---------------------------
     // CHECK TRANSACTION STATUS
     // ---------------------------
+//    public String checkTransactionStatus(String txHash) {
+//        try {
+//            Map<String, Object> params = Map.of(
+//                    "method", "tx",
+//                    "params", List.of(Map.of("transaction", txHash, "binary", false))
+//            );
+//
+//            HttpHeaders headers = new HttpHeaders();
+//            headers.setContentType(MediaType.APPLICATION_JSON);
+//            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(params, headers);
+//
+//            ResponseEntity<Map> response = restTemplate.postForEntity(xrplRpcUrl, entity, Map.class);
+//            Map<?, ?> body = response.getBody();
+//            if (body == null) return "No response from XRPL node";
+//
+//            Map<?, ?> result = (Map<?, ?>) body.get("result");
+//            if (result == null) {
+//                return "No result for tx: " + txHash;
+//            }
+//
+//            Boolean validated = (Boolean) result.get("validated");
+//            String engineResult = result.get("engine_result") != null ? result.get("engine_result").toString() : "unknown";
+//            String engineMessage = result.get("engine_result_message") != null ? result.get("engine_result_message").toString() : "";
+//
+//            StringBuilder sb = new StringBuilder();
+//            sb.append("txHash=").append(txHash)
+//                    .append(", validated=").append(validated)
+//                    .append(", engine_result=").append(engineResult);
+//
+//            if (!engineMessage.isEmpty()) {
+//                sb.append(", message=").append(engineMessage);
+//            }
+//
+//            return sb.toString();
+//        } catch (Exception e) {
+//            return "checkTransactionStatus failed: " + e.getMessage();
+//        }
+//    }
     public String checkTransactionStatus(String txHash) {
         try {
             Map<String, Object> params = Map.of(
@@ -437,27 +506,24 @@ public class XrplService {
 
             ResponseEntity<Map> response = restTemplate.postForEntity(xrplRpcUrl, entity, Map.class);
             Map<?, ?> body = response.getBody();
-            if (body == null) return "No response from XRPL node";
+            if (body == null) return "No response";
 
             Map<?, ?> result = (Map<?, ?>) body.get("result");
-            if (result == null) {
-                return "No result for tx: " + txHash;
+            if (result == null) return "No result";
+
+            // --- VALIDATION STATUS ---
+            boolean validated = Boolean.TRUE.equals(result.get("validated"));
+
+            // --- SUCCESS STATUS ---
+            String txResult = "";
+            if (result.containsKey("meta")) {
+                Map<?, ?> meta = (Map<?, ?>) result.get("meta");
+                txResult = meta.get("TransactionResult") != null ? meta.get("TransactionResult").toString() : "";
             }
 
-            Boolean validated = (Boolean) result.get("validated");
-            String engineResult = result.get("engine_result") != null ? result.get("engine_result").toString() : "unknown";
-            String engineMessage = result.get("engine_result_message") != null ? result.get("engine_result_message").toString() : "";
+            // Build output string
+            return "validated=" + validated + ", txResult=" + txResult;
 
-            StringBuilder sb = new StringBuilder();
-            sb.append("txHash=").append(txHash)
-                    .append(", validated=").append(validated)
-                    .append(", engine_result=").append(engineResult);
-
-            if (!engineMessage.isEmpty()) {
-                sb.append(", message=").append(engineMessage);
-            }
-
-            return sb.toString();
         } catch (Exception e) {
             return "checkTransactionStatus failed: " + e.getMessage();
         }
@@ -472,7 +538,6 @@ public class XrplService {
             return false;
         }
     }
-
     public String createInvestorTrustLine(String investorSecret, String issuerAddress, String currencyCode, String limitAmount) {
         try {
             // 1. Decode secret -> keypair
@@ -480,13 +545,13 @@ public class XrplService {
             KeyPair keyPair = seed.deriveKeyPair();
             Address investor = keyPair.publicKey().deriveAddress();
 
-            // 2. Autofill values
+            // 2. Autofill XRPL fields
             Map<String, Object> auto = autofillForAccount(investor, 20, 2);
             long feeDrops = (long) auto.get("feeDrops");
             UnsignedInteger sequence = (UnsignedInteger) auto.get("sequence");
             UnsignedInteger lastLedgerSequence = (UnsignedInteger) auto.get("lastLedgerSequence");
 
-            // 3. Build TrustSet transaction
+            // 3. Build TrustSet tx
             TrustSet trust = TrustSet.builder()
                     .account(investor)
                     .fee(XrpCurrencyAmount.ofDrops(feeDrops))
@@ -499,29 +564,88 @@ public class XrplService {
                                     .value(limitAmount)
                                     .build()
                     )
-                    .flags(TrustSetFlags.of(0x00020000L))   // ⭐ ENABLE RIPPLING (CLEAR NoRipple)
                     .signingPublicKey(keyPair.publicKey())
                     .build();
 
-
-            // 4. SIGN OFFLINE using xrpl4j
+            // 4. SIGN OFFLINE
             SignatureService service = new BcSignatureService();
             SingleSignedTransaction<TrustSet> signed = service.sign(keyPair.privateKey(), trust);
 
-            // 5. Submit signed blob
+            // 5. Submit
             SubmitResult<TrustSet> result = client.submit(signed);
 
             if (!"tesSUCCESS".equals(result.engineResult())) {
-                return "❌ Trustline failed: " + result.engineResult()
-                        + " - " + result.engineResultMessage();
+                return "❌ Trustline failed: " + result.engineResult() +
+                        " - " + result.engineResultMessage();
             }
 
-            return "Trustline OK. Hash: " + result.transactionResult().hash().value();
+            String txHash = result.transactionResult().hash().value();
+
+            // 6. Wait for validation (add this new block)
+            int retries = 0;
+            boolean validated = false;
+            while (retries < 15) { // ~45-60 seconds max
+                Thread.sleep(3000); // Wait 3 seconds between checks
+                String status = checkTransactionStatus(txHash);
+                if (status.contains("validated=true")) {
+                    validated = true;
+                    break;
+                }
+                retries++;
+            }
+
+            if (validated) {
+                return "Trustline OK. Hash: " + txHash;
+            } else {
+                return "❌ Trustline submitted but not validated in time: " + txHash +
+                        ". It may have expired or failed—check XRPL explorer.";
+            }
 
         } catch (Exception e) {
             return "Trustline creation failed: " + e.getMessage();
         }
     }
+    public String createHotWalletTrustLine(String hotSecret, String issuerAddress, String currency, String limit) {
+        try {
+            Seed seed = Seed.fromBase58EncodedSecret(Base58EncodedSecret.of(hotSecret));
+            KeyPair keypair = seed.deriveKeyPair();
+            Address hot = keypair.publicKey().deriveAddress();
+
+            Map<String, Object> auto = autofillForAccount(hot, 20, 2);
+            long feeDrops = (long) auto.get("feeDrops");
+            UnsignedInteger sequence = (UnsignedInteger) auto.get("sequence");
+            UnsignedInteger lastLedger = (UnsignedInteger) auto.get("lastLedgerSequence");
+
+            TrustSet trust = TrustSet.builder()
+                    .account(hot)
+                    .fee(XrpCurrencyAmount.ofDrops(feeDrops))
+                    .sequence(sequence)
+                    .lastLedgerSequence(lastLedger)
+                    .limitAmount(
+                            IssuedCurrencyAmount.builder()
+                                    .currency(currency)
+                                    .issuer(Address.of(issuerAddress))
+                                    .value(limit)
+                                    .build()
+                    )
+                    .flags(TrustSetFlags.of(262144L))// ← this is the clean way
+                    // .signingPublicKey(keypair.publicKey())
+                    .build();
+
+            SignatureService signer = new BcSignatureService();
+            SingleSignedTransaction<TrustSet> signed = signer.sign(keypair.privateKey(), trust);
+            SubmitResult<TrustSet> result = client.submit(signed);
+
+            if (!"tesSUCCESS".equals(result.engineResult())) {
+                return "❌ Hot Trustline Error: " + result.engineResultMessage();
+            }
+            return "Hot trustline OK: " + result.transactionResult().hash().value();
+
+        } catch (Exception e) {
+            return "❌ Hot trustline failed: " + e.getMessage();
+        }
+    }
+
 
 
     private String getAddressFromSecret(String secret) {
@@ -599,6 +723,125 @@ public class XrplService {
                 currencyCode,
                 "10000000000"
         );
+    }
+    public boolean investorHasTrustline(String investorAddress, String issuer, String currency) {
+        try {
+            AccountLinesRequestParams params = AccountLinesRequestParams.builder()
+                    .account(Address.of(investorAddress))
+                    .ledgerSpecifier(LedgerSpecifier.CURRENT)
+                    .build();
+
+            AccountLinesResult result = client.accountLines(params);
+
+            for (TrustLine tl : result.lines()) {
+
+                System.out.println("TL --> currency=" + tl.currency()
+                        + " issuer=" + tl.account()
+                        + " limit=" + tl.limit());
+
+                if (tl.currency().equals(currency)) {
+
+                    // issuer can appear as "account" OR "peer" depending on trustline direction
+                    boolean matchesIssuer =
+                            tl.account().equals(Address.of(issuer)) ||
+                                    tl.limitPeer().equals(Address.of(issuer)) ||
+                                    tl.limitPeer().equals(Address.of(issuer));
+
+                    if (matchesIssuer) {
+                        return true;
+                    }
+                }
+
+            }
+
+            return false;
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+
+
+    public String generateUnsignedDefaultRipple() throws Exception {
+        Address cold = Address.of(coldWalletAddress);  // Your cold wallet address
+
+        Map<String, Object> auto = autofillForAccount(cold, DEFAULT_EXTRA_LEDGERS, DEFAULT_FEE_MULTIPLIER);
+        long feeDrops = (long) auto.get("feeDrops");
+        UnsignedInteger sequence = (UnsignedInteger) auto.get("sequence");
+        UnsignedInteger lastLedgerSequence = (UnsignedInteger) auto.get("lastLedgerSequence");
+
+        ObjectNode txJson = mapper.createObjectNode();
+        txJson.put("TransactionType", "AccountSet");
+        txJson.put("Account", cold.value());
+        txJson.put("Fee", String.valueOf(feeDrops));
+        txJson.put("Sequence", sequence.intValue());
+        txJson.put("LastLedgerSequence", lastLedgerSequence.intValue());
+        txJson.put("SetFlag", 8);  // 8 = asfDefaultRipple
+
+        return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(txJson);
+    }
+    public String clearNoRippleOnTrustline(String secret, String issuerAddress, String currency, String limit) {
+        try {
+            Seed seed = Seed.fromBase58EncodedSecret(Base58EncodedSecret.of(secret));
+            KeyPair keyPair = seed.deriveKeyPair();
+            Address account = keyPair.publicKey().deriveAddress();
+
+            Map<String, Object> auto = autofillForAccount(account, DEFAULT_EXTRA_LEDGERS, DEFAULT_FEE_MULTIPLIER);
+            long feeDrops = (long) auto.get("feeDrops");
+            UnsignedInteger sequence = (UnsignedInteger) auto.get("sequence");
+            UnsignedInteger lastLedgerSequence = (UnsignedInteger) auto.get("lastLedgerSequence");
+
+            TrustSet trust = TrustSet.builder()
+                    .account(account)
+                    .fee(XrpCurrencyAmount.ofDrops(feeDrops))
+                    .sequence(sequence)
+                    .lastLedgerSequence(lastLedgerSequence)
+                    .limitAmount(
+                            IssuedCurrencyAmount.builder()
+                                    .currency(currency)
+                                    .issuer(Address.of(issuerAddress))
+                                    .value(limit)  // Keep existing limit, e.g., "10000000000"
+                                    .build()
+                    )
+                    .flags(TrustSetFlags.of(262144L))  // tfClearNoRipple = 262144 (0x40000)
+                    .signingPublicKey(keyPair.publicKey())
+                    .build();
+
+            SignatureService service = new BcSignatureService();
+            SingleSignedTransaction<TrustSet> signed = service.sign(keyPair.privateKey(), trust);
+
+            SubmitResult<TrustSet> result = client.submit(signed);
+
+            if (!"tesSUCCESS".equals(result.engineResult())) {
+                return "❌ Clear NoRipple failed: " + result.engineResult() + " - " + result.engineResultMessage();
+            }
+
+            String txHash = result.transactionResult().hash().value();
+
+            // Wait for validation (copy your polling code from broadcastSigned)
+            int retries = 0;
+            boolean validated = false;
+            while (retries < 15) {
+                Thread.sleep(3000);
+                String status = checkTransactionStatus(txHash);
+                if (status.contains("validated=true") && status.contains("tesSUCCESS")) {
+                    validated = true;
+                    break;
+                }
+                retries++;
+            }
+
+            if (validated) {
+                return "✅ Clear NoRipple OK. Hash: " + txHash;
+            } else {
+                return "❌ Submitted but not validated: " + txHash;
+            }
+
+        } catch (Exception e) {
+            return "Clear NoRipple failed: " + e.getMessage();
+        }
     }
 
 
