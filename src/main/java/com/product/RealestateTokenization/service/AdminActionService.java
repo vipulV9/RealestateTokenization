@@ -90,12 +90,12 @@ public class AdminActionService {
                 throw new RuntimeException("❌ Investor Trustline failed: " + tl);
             }
         }
-        xrplService.clearNoRippleOnTrustline(
-                xrplService.getColdWalletSecret(),     // ← COLD secret
-                xrplService.getHotWalletAddress(),     // ← counterparty = Hot wallet
-                "VIP",
-                "0"                                    // ← keep limit 0 on Cold side (normal for issuer)
-        );
+//        xrplService.clearNoRippleOnTrustline(
+//                xrplService.getColdWalletSecret(),     // ← COLD secret
+//                xrplService.getHotWalletAddress(),     // ← counterparty = Hot wallet
+//                "VIP",
+//                "0"                                    // ← keep limit 0 on Cold side (normal for issuer)
+//        );
         String clearResult = xrplService.clearNoRippleOnTrustline(rawSecret, coldWalletAddress, token, "10000000000");
         if (!clearResult.contains("OK")) {
             throw new RuntimeException("❌ Clear NoRipple failed: " + clearResult);

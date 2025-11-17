@@ -86,19 +86,19 @@ public class PropertyService {
         p.setSpvId(req.spvId());
         p.setStatus("CREATED");
 
-        // ✅ Validate and set token symbol (must be 3 letters only)
+        // Validate and set token symbol (must be 3 uppercase letters)
         String tokenSymbol = req.tokenSymbol();
         if (tokenSymbol == null || !tokenSymbol.matches("^[A-Z]{3}$")) {
             throw new IllegalArgumentException("Token symbol must be exactly 3 uppercase letters (e.g., PRP, SKY, GVA)");
         }
         p.setTokenSymbol(tokenSymbol);
 
-        // ✅ Initially no tokens distributed
+        // Initially no tokens distributed
         p.setAvailableTokens(0);
 
-        // ✅ Cloudinary upload logic
+        // Cloudinary upload
         List<String> uploadedUrls = new ArrayList<>();
-        if (images != null) {
+        if (images != null && !images.isEmpty()) {
             for (MultipartFile image : images) {
                 Map uploadResult = cloudinary.uploader().upload(image.getBytes(), ObjectUtils.emptyMap());
                 uploadedUrls.add((String) uploadResult.get("url"));
@@ -106,11 +106,18 @@ public class PropertyService {
         }
         p.setPhotoUrls(uploadedUrls);
 
-        // ✅ Generate unsigned XRPL issuance transaction
+        // Generate unsigned issuance
         String unsignedJson = xrplService.generateUnsignedIssuance(p.getTokenSymbol(), req.totalTokens());
         p.setUnsignedTxBlob(unsignedJson);
 
-        return repo.save(p);
+        // Save first so we have the entity
+        p = repo.save(p);
+
+        // NOW enable rippling from Cold → Hot for this token
+        // This runs ONCE per property, safely, and fixes tecPATH_DRY forever
+        xrplService.ensureIssuerAllowsRipplingToHot(p.getTokenSymbol());
+
+        return p;
     }
 
 

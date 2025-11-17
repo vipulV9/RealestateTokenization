@@ -450,6 +450,7 @@ public class XrplService {
         } catch (Exception e) {
             throw new RuntimeException("Broadcast failed: " + e.getMessage(), e);
         }
+
     }
 
     // ---------------------------
@@ -841,6 +842,73 @@ public class XrplService {
 
         } catch (Exception e) {
             return "Clear NoRipple failed: " + e.getMessage();
+        }
+    }
+
+    /**
+     * Ensures the issuer (Cold) allows rippling toward the Hot wallet for a given currency.
+     * Safe to call multiple times — it only submits if needed.
+     */
+    public void ensureIssuerAllowsRipplingToHot(String currencyCode) {
+        try {
+            Address cold = Address.of(coldWalletAddress);
+            Address hot = Address.of(hotWalletAddress);
+
+            // Check current state
+            AccountLinesResult lines = client.accountLines(
+                    AccountLinesRequestParams.builder()
+                            .account(cold)
+                            .build()
+            );
+
+            Optional<TrustLine> existingLine = lines.lines().stream()
+                    .filter(tl -> currencyCode.equals(tl.currency()) && hot.equals(tl.account()))
+                    .findFirst();
+
+            if (existingLine.isPresent() && !existingLine.get().noRipplePeer()) {
+                // Already correct — no action needed
+                System.out.println("Rippling already allowed from Cold → Hot for " + currencyCode);
+                return;
+            }
+
+            // Need to submit TrustSet with clearNoRipple
+            System.out.println("Submitting TrustSet to allow rippling Cold → Hot for " + currencyCode);
+
+            Seed seed = Seed.fromBase58EncodedSecret(Base58EncodedSecret.of(coldWalletSeed));
+            KeyPair coldKeys = seed.deriveKeyPair();
+
+            Map<String, Object> auto = autofillForAccount(cold, 20, 2);
+            long feeDrops = (long) auto.get("feeDrops");
+            UnsignedInteger sequence = (UnsignedInteger) auto.get("sequence");
+            UnsignedInteger lastLedger = (UnsignedInteger) auto.get("lastLedgerSequence");
+
+            TrustSet trustSet = TrustSet.builder()
+                    .account(cold)
+                    .fee(XrpCurrencyAmount.ofDrops(feeDrops))
+                    .sequence(sequence)
+                    .lastLedgerSequence(lastLedger)
+                    .limitAmount(IssuedCurrencyAmount.builder()
+                            .currency(currencyCode)
+                            .issuer(hot)
+                            .value("0")  // Issuer never holds own tokens
+                            .build())
+                    .flags(TrustSetFlags.of(262144L))  // tfClearNoRipple = 262144 (0x40000)
+                    .signingPublicKey(coldKeys.publicKey())
+                    .build();
+
+            SingleSignedTransaction<TrustSet> signed = signatureService.sign(coldKeys.privateKey(), trustSet);
+            SubmitResult<TrustSet> result = client.submit(signed);
+
+            if ("tesSUCCESS".equals(result.engineResult())) {
+                System.out.println("Successfully enabled rippling Cold → Hot for " + currencyCode +
+                        " | Hash: " + result.transactionResult().hash());
+            } else {
+                System.err.println("Failed to enable rippling for " + currencyCode + ": " + result.engineResultMessage());
+            }
+
+        } catch (Exception e) {
+            // Don't crash the whole flow — log and continue
+            System.err.println("Warning: Could not ensure Cold→Hot rippling for " + currencyCode + ": " + e.getMessage());
         }
     }
 
