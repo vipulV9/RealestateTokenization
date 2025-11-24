@@ -26,4 +26,7 @@ public interface TransactionRepo extends JpaRepository<Transaction, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT t FROM Transaction t WHERE t.id = :id")
     Optional<Transaction> findByIdForUpdate(@Param("id") Long id);
+
+    List<Transaction> findByUserIdAndStatus(Long userId, TransactionStatus status);
+
 }

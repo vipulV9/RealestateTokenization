@@ -4,6 +4,7 @@ import com.cloudinary.Cloudinary;
 import com.cloudinary.utils.ObjectUtils;
 import com.product.RealestateTokenization.controller.PropertyCreateReq;
 import com.product.RealestateTokenization.model.Property;
+import com.product.RealestateTokenization.model.PropertyUpdateReq;
 import com.product.RealestateTokenization.repository.PropertyRepo;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -79,13 +80,32 @@ public class PropertyService {
     public Property createPropertyWithUnsignedTx(PropertyCreateReq req, List<MultipartFile> images) throws Exception {
         Property p = new Property();
         p.setName(req.name());
-        p.setLocation(req.location());
+
+        Property.Coordinates coords = new Property.Coordinates();
+        coords.setLat(req.lat());
+        coords.setLng(req.lng());
+        p.setCoordinates(coords);
+
         p.setPropertyValue(req.value());
+        p.setCurrentValue(req.value());
         p.setTotalTokens(req.totalTokens());
         p.setTokenPrice(req.tokenPrice());
         p.setSpvId(req.spvId());
         p.setStatus("CREATED");
 
+        // ------------ ADD ROOMS (not hardcoded) ----------
+        if (req.rooms() != null && !req.rooms().isEmpty()) {
+            List<Property.Room> roomList = new ArrayList<>();
+
+            for (PropertyCreateReq.RoomReq r : req.rooms()) {
+                Property.Room room = new Property.Room();
+                room.setType(r.type());
+                room.setValue(r.value());
+                roomList.add(room);
+            }
+
+            p.setRooms(roomList);
+        }
         // Validate and set token symbol (must be 3 uppercase letters)
         String tokenSymbol = req.tokenSymbol();
         if (tokenSymbol == null || !tokenSymbol.matches("^[A-Z]{3}$")) {
@@ -159,5 +179,49 @@ public Property broadcastSignedIssuance(Long id, String signedTxBlob) throws Exc
 
     return repo.save(p);
 }
+
+    @Transactional
+    public Property updateProperty(Long id, PropertyUpdateReq req) {
+        Property p = repo.findById(id)
+                .orElseThrow(() -> new RuntimeException("Property not found"));
+
+        // Update name
+        if (req.name() != null)
+            p.setName(req.name());
+
+        // Update currentValue → auto adjust tokenPrice
+        if (req.currentValue() != null) {
+            p.setCurrentValue(req.currentValue());
+
+            // Adjust token price based on new market/current value
+            double newTokenPrice = req.currentValue() / p.getTotalTokens();
+            p.setTokenPrice(newTokenPrice);
+        }
+
+        // Update propertyValue
+        if (req.propertyValue() != null)
+            p.setPropertyValue(req.propertyValue());
+
+        // Update total tokens
+        if (req.totalTokens() != null) {
+            p.setTotalTokens(req.totalTokens());
+
+            // Re-adjust token price after totalTokens changes
+            double adjustedPrice = p.getCurrentValue() / req.totalTokens();
+            p.setTokenPrice(adjustedPrice);
+        }
+
+        // Update SPV id
+        if (req.spvId() != null)
+            p.setSpvId(req.spvId());
+
+        // Update token symbol
+        if (req.tokenSymbol() != null)
+            p.setTokenSymbol(req.tokenSymbol());
+
+        return repo.save(p);
+    }
+
+
 
 }

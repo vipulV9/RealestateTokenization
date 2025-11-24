@@ -27,16 +27,10 @@ public class OAuth2AuthenticationSuccessHandler implements AuthenticationSuccess
         this.jwtService = jwtService;
         this.userService = userService;
     }
-
     @Override
     public void onAuthenticationSuccess(HttpServletRequest request,
                                         HttpServletResponse response,
                                         Authentication authentication) throws IOException {
-
-        // STOP FURTHER PROCESSING
-        response.setStatus(HttpServletResponse.SC_OK);
-        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        response.setCharacterEncoding("UTF-8");
 
         OidcUser oidcUser = (OidcUser) authentication.getPrincipal();
 
@@ -44,19 +38,20 @@ public class OAuth2AuthenticationSuccessHandler implements AuthenticationSuccess
         String name = oidcUser.getFullName();
         String googleId = oidcUser.getSubject();
 
-        if (!Boolean.TRUE.equals(oidcUser.getEmailVerified())) {
-            response.getWriter().write("{\"error\": \"Email not verified\"}");
-            return;
-        }
-
         User user = userService.findByEmail(email)
                 .orElseGet(() -> userService.registerViaGoogle(email, name, googleId));
 
         String jwt = jwtService.generateToken(user);
 
-        response.getWriter().write("{\"token\": \"" + jwt + "\"}");
+        // Detect if this user is admin
+        boolean isAdmin = user.getRole().equals("ADMIN");
 
-        // CRITICAL: PREVENT DEFAULT REDIRECT
-        response.flushBuffer();
+        String redirectUrl = isAdmin
+                ? "http://127.0.0.1:5500/adminsite.html?token=" + jwt
+                : "http://127.0.0.1:5500/payment.html?token=" + jwt;
+
+        response.sendRedirect(redirectUrl);
     }
+
+
 }

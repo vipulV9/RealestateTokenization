@@ -10,7 +10,10 @@ import com.product.RealestateTokenization.service.WalletService;
 import com.razorpay.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -60,15 +63,35 @@ public class InvestorController {
 //        return ResponseEntity.ok(order);
 //    }
 
+//    @PostMapping("/payment/create-order")
+//    public ResponseEntity<?> createOrder(@RequestBody Map<String, Object> payload) {
+//        try {
+//            Long investorId = Long.valueOf(payload.get("investorId").toString());
+//            Long propertyId = Long.valueOf(payload.get("propertyId").toString());
+//            int tokens = Integer.parseInt(payload.get("tokens").toString());
+//            String idempotencyKey = payload.get("idempotencyKey").toString();
+//
+//            Map<String, Object> order = paymentService.createOrder(investorId, propertyId, tokens, idempotencyKey);
+//            return ResponseEntity.ok(order);
+//
+//        } catch (Exception e) {
+//            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+//                    .body(Map.of("error", e.getMessage()));
+//        }
+//    }
+
     @PostMapping("/payment/create-order")
     public ResponseEntity<?> createOrder(@RequestBody Map<String, Object> payload) {
         try {
-            Long investorId = Long.valueOf(payload.get("investorId").toString());
+            Long investorId = getCurrentUserId();   // secure
             Long propertyId = Long.valueOf(payload.get("propertyId").toString());
             int tokens = Integer.parseInt(payload.get("tokens").toString());
             String idempotencyKey = payload.get("idempotencyKey").toString();
 
-            Map<String, Object> order = paymentService.createOrder(investorId, propertyId, tokens, idempotencyKey);
+            Map<String, Object> order = paymentService.createOrder(
+                    investorId, propertyId, tokens, idempotencyKey
+            );
+
             return ResponseEntity.ok(order);
 
         } catch (Exception e) {
@@ -76,7 +99,6 @@ public class InvestorController {
                     .body(Map.of("error", e.getMessage()));
         }
     }
-
 
     @PostMapping("/webhook")
     public ResponseEntity<String> handleWebhook(@RequestBody String payload,
@@ -86,24 +108,36 @@ public class InvestorController {
     }
 
 
+//
+//    @GetMapping("/wallet")
+//    public Wallet getWallet(@RequestHeader("userId") Long userId) {
+//        return walletService.getWallet(userId);
+//    }
+@GetMapping("/wallet")
+public Wallet getWallet() {
+    Long userId = getCurrentUserId();  // SECURE extraction
+    return walletService.getWallet(userId);
+}
 
-    @GetMapping("/wallet")
-    public Wallet getWallet(@RequestHeader("userId") Long userId) {
-        return walletService.getWallet(userId);
-    }
 
     @PostMapping("/properties/{id}/sell")
     public ResponseEntity<?> sell(@PathVariable Long id, @RequestBody SellRequest req) {
-        walletService.requestSell(req.userId(), id, req.tokens());
+        Long userId = getCurrentUserId();
+        walletService.requestSell(userId, id, req.tokens());
         return ResponseEntity.ok("Sell request created");
     }
 
     @PostMapping("/wallet/address")
     public ResponseEntity<?> setAddress(@RequestBody AddressRequest req) {
-        walletService.setInvestorAddress(req.userId(), req.address());
+        Long userId = getCurrentUserId();
+        walletService.setInvestorAddress(userId, req.address());
         return ResponseEntity.ok("Address saved");
     }
 
+
+    private Long getCurrentUserId() {
+        return (Long) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+    }
 
 
 }

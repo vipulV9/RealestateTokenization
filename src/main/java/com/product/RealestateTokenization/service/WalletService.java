@@ -63,6 +63,8 @@ public class WalletService {
         return repo.findByUserId(userId).orElseThrow();
     }
 
+
+
     public void setInvestorAddress(Long userId, String address) {
         User user = userService.getUser(userId);
         if ("CUSTODIAL".equals(user.getCustodyMode())) {

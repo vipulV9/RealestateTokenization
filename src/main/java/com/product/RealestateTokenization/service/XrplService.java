@@ -166,13 +166,7 @@ public class XrplService {
         return UnsignedInteger.valueOf(ledgerIndex.unsignedIntegerValue().intValue());
     }
 
-    /**
-     * Autofill-like helper: returns a map with keys: "feeDrops" (long), "sequence" (UnsignedInteger),
-     * "lastLedgerSequence" (UnsignedInteger).
-     *
-     * - extraLedgers: how many ledgers to add for the LastLedgerSequence window.
-     * - feeMultiplier: multiply the network fee by this factor to increase priority.
-     */
+
     private Map<String, Object> autofillForAccount(Address account, int extraLedgers, int feeMultiplier) throws Exception {
         Map<String, Object> out = new HashMap<>();
 
@@ -200,12 +194,7 @@ public class XrplService {
         return out;
     }
 
-    // ---------------------------
-    // UNSIGNED ISSUANCE (Payment)
-    // ---------------------------
-    // ---------------------------
-// UNSIGNED ISSUANCE (Payment)
-// ---------------------------
+
     public String generateUnsignedIssuance(String currency, int amount) throws Exception {
 
         Address cold = Address.of(issuerAddress);       // COLD wallet (issuer)

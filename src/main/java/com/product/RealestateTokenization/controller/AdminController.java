@@ -1,11 +1,8 @@
 package com.product.RealestateTokenization.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.product.RealestateTokenization.model.Property;
-import com.product.RealestateTokenization.model.Transaction;
-import com.product.RealestateTokenization.service.AdminActionService;
-import com.product.RealestateTokenization.service.PropertyService;
-import com.product.RealestateTokenization.service.XrplService;
+import com.product.RealestateTokenization.model.*;
+import com.product.RealestateTokenization.service.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.*;
@@ -20,6 +17,13 @@ public class AdminController {
 
     @Autowired
     XrplService xrplService;
+
+    @Autowired
+    UserService userService;
+
+    @Autowired
+    WalletService walletService;
+
     private final PropertyService propertyService;
     private final AdminActionService adminService;
 
@@ -53,6 +57,15 @@ public ResponseEntity<PropertyResponse> createProperty(
     Property property = propertyService.createPropertyWithUnsignedTx(req, images);
     return ResponseEntity.ok(new PropertyResponse(property.getId()));
 }
+
+@PatchMapping("/properties/{id}")
+    public ResponseEntity<Property> updateProperty(
+            @PathVariable Long id,
+            @RequestBody PropertyUpdateReq req
+    ) {
+        return ResponseEntity.ok(propertyService.updateProperty(id, req));
+    }
+
 
 
 
@@ -100,6 +113,8 @@ public ResponseEntity<PropertyResponse> createProperty(
         return adminService.confirm(id, adminId);
     }
 
+
+
     @PostMapping("/transactions/{id}/reject")
     public Transaction reject(@PathVariable Long id) {
         return adminService.reject(id);
@@ -119,6 +134,15 @@ public ResponseEntity<PropertyResponse> createProperty(
     public ResponseEntity<String> uploadSignedDefaultRipple(@RequestBody SignedTxUploadReq req) throws Exception {
         String result = xrplService.broadcastSigned(req.signedTxBlob());
         return ResponseEntity.ok(result);
+    }
+    @GetMapping("/users/full-details")
+    public ResponseEntity<List<UserInvestmentDTO>> getAllUsersInvestments() {
+        return ResponseEntity.ok(userService.getAllUsersInvestmentDetails());
+    }
+
+    @GetMapping("/wallet")
+    public Wallet getWallet(@RequestHeader("userId") Long userId) {
+        return walletService.getWallet(userId);
     }
 }
 

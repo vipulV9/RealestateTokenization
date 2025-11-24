@@ -1,11 +1,18 @@
 package com.product.RealestateTokenization.service;
 
-import com.product.RealestateTokenization.model.User;
+import com.product.RealestateTokenization.model.*;
+import com.product.RealestateTokenization.repository.PropertyRepo;
+import com.product.RealestateTokenization.repository.TransactionRepo;
 import com.product.RealestateTokenization.repository.UserRepo;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 public class UserService {
@@ -62,4 +69,85 @@ public class UserService {
     public User getUser(Long id) {
         return userRepo.findById(id).orElseThrow();
     }
+
+
+    @Autowired
+    private TransactionRepo txRepo;
+
+    @Autowired
+    private PropertyRepo propertyRepo;
+
+
+    public List<UserInvestmentDTO> getAllUsersInvestmentDetails() {
+
+        List<User> users = userRepo.findAll();
+
+        return users.stream().map(user -> {
+
+            // Fetch successful transactions of this user
+            List<Transaction> txns = txRepo.findByUserIdAndStatus(
+                    user.getId(), TransactionStatus.COMPLETED
+            );
+
+            double totalInvested = txns.stream()
+                    .mapToDouble(Transaction::getAmount)
+                    .sum();
+
+            // Group by property
+            Map<Long, List<Transaction>> byProperty =
+                    txns.stream().collect(Collectors.groupingBy(Transaction::getPropertyId));
+
+            // Build holdings list
+            List<UserInvestmentDTO.PropertyHolding> holdings =
+                    byProperty.entrySet().stream().map(entry -> {
+
+                                Long propertyId = entry.getKey();
+                                List<Transaction> propTxns = entry.getValue();
+
+                                Property p = propertyRepo.findById(propertyId).orElse(null);
+                                if (p == null) return null;
+
+                                int tokensOwned = propTxns.stream()
+                                        .mapToInt(Transaction::getTokens)
+                                        .sum();
+
+                                double investedAmount = propTxns.stream()
+                                        .mapToDouble(Transaction::getAmount)
+                                        .sum();
+
+                                double currentValue = tokensOwned * p.getTokenPrice();
+
+                                return new UserInvestmentDTO.PropertyHolding(
+                                        p.getId(),
+                                        p.getName(),
+                                        p.getTokenSymbol(),
+                                        tokensOwned,
+                                        p.getTokenPrice(),
+                                        investedAmount,
+                                        currentValue
+                                );
+                            })
+                            .filter(Objects::nonNull)
+                            .toList();
+
+            // Calculate total portfolio value (sum of currentValue of each holding)
+            double portfolioValue = holdings.stream()
+                    .mapToDouble(UserInvestmentDTO.PropertyHolding::currentValue)
+                    .sum();
+
+            return new UserInvestmentDTO(
+                    user.getId(),
+                    user.getName(),
+                    user.getEmail(),
+                    user.getPhone(),
+                    user.getKycStatus(),
+                    user.getCustodyMode(),
+                    totalInvested,
+                    portfolioValue,
+                    holdings
+            );
+
+        }).toList();
+    }
+
 }
