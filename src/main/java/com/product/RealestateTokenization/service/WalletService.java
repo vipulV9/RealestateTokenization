@@ -20,6 +20,8 @@ import org.xrpl.xrpl4j.model.jackson.ObjectMapperFactory;
 import org.xrpl.xrpl4j.model.transactions.Payment;
 import org.xrpl.xrpl4j.model.transactions.TrustSet;
 
+import java.util.List;
+
 @Service
 public class WalletService {
 
@@ -61,6 +63,10 @@ public class WalletService {
 
     public Wallet getWallet(Long userId) {
         return repo.findByUserId(userId).orElseThrow();
+    }
+    public List<Wallet> getAllWallet()
+    {
+        return  repo.findAll();
     }
 
 

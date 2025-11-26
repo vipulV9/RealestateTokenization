@@ -12,11 +12,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 @Entity
 @Data
 public class Wallet {
-    @Id @GeneratedValue private Long id;
+    @Id @GeneratedValue(strategy = GenerationType.AUTO) private Long id;
     private Long userId;
     private String address, secretEncrypted;
     private boolean fundedXrp = false;
-
     public void setUser(User user) { this.userId = user.getId(); }
 
 

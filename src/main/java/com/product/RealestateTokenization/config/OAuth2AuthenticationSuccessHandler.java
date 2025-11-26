@@ -45,10 +45,11 @@ public class OAuth2AuthenticationSuccessHandler implements AuthenticationSuccess
 
         // Detect if this user is admin
         boolean isAdmin = user.getRole().equals("ADMIN");
-
         String redirectUrl = isAdmin
-                ? "http://127.0.0.1:5500/adminsite.html?token=" + jwt
-                : "http://127.0.0.1:5500/payment.html?token=" + jwt;
+                ? "http://localhost:5173/oauth2-redirect?token=" + jwt
+                : "http://localhost:5173/oauth2-redirect?token=" + jwt;
+
+
 
         response.sendRedirect(redirectUrl);
     }

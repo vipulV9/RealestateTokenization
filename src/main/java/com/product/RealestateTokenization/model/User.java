@@ -7,7 +7,8 @@ import lombok.Data;
 @Entity
 @Data
 public class User {
-    @Id @GeneratedValue private Long id;
+    @Id @GeneratedValue(strategy = GenerationType.AUTO)
+    private Long id;
     private String name, email, phone, passwordHash, role = "INVESTOR", custodyMode = "NON_CUSTODIAL";
     private String kycStatus = "PENDING";
     public void setKycStatus(String status) { this.kycStatus = status; }

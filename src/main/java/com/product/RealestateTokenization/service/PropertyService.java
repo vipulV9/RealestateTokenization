@@ -145,6 +145,11 @@ public class PropertyService {
         return repo.findByStatusIn(List.of("ON_CHAIN", "HOT_READY"));
     }
 
+    public List<Property> getallProperties()
+    {
+        return repo.findByStatusIn(List.of("ON_CHAIN", "HOT_READY","CREATED"));
+    }
+
     public Property getProperty(Long id) {
         return repo.findById(id).orElseThrow();
     }

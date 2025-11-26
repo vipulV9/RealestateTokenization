@@ -39,7 +39,7 @@ public class AdminController {
 //    }
 @GetMapping("/properties")
 public List<Property> listProperties() {
-    return propertyService.getOnChainProperties();
+    return propertyService.getallProperties();
 }
 
 @PostMapping(
@@ -108,6 +108,14 @@ public ResponseEntity<PropertyResponse> createProperty(
         return adminService.getPendingPayments();
     }
 
+    @GetMapping("/allTxn")
+    public List<Transaction> getalltransaction()
+    {
+        return adminService.getAllTransaction();
+    }
+
+
+
     @PostMapping("/transactions/{id}/confirm")
     public Transaction confirm(@PathVariable Long id, @RequestHeader("adminId") Long adminId) throws Exception {
         return adminService.confirm(id, adminId);
@@ -130,11 +138,14 @@ public ResponseEntity<PropertyResponse> createProperty(
                 .contentLength(jsonBytes.length)
                 .body(resource);
     }
+
+
     @PostMapping("/issuer/set-default-ripple/upload-signed")
     public ResponseEntity<String> uploadSignedDefaultRipple(@RequestBody SignedTxUploadReq req) throws Exception {
         String result = xrplService.broadcastSigned(req.signedTxBlob());
         return ResponseEntity.ok(result);
     }
+
     @GetMapping("/users/full-details")
     public ResponseEntity<List<UserInvestmentDTO>> getAllUsersInvestments() {
         return ResponseEntity.ok(userService.getAllUsersInvestmentDetails());
@@ -143,6 +154,12 @@ public ResponseEntity<PropertyResponse> createProperty(
     @GetMapping("/wallet")
     public Wallet getWallet(@RequestHeader("userId") Long userId) {
         return walletService.getWallet(userId);
+    }
+
+    @GetMapping("/allWallet")
+    public List<Wallet> getallwallet()
+    {
+        return  walletService.getAllWallet();
     }
 }
 

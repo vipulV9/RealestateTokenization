@@ -133,11 +133,9 @@ public class PaymentService {
 
     @Transactional
     public Map<String, Object> createOrder(Long investorId, Long propertyId, int tokens, String idempotencyKey) {
-        // ✅ Prevent duplicate requests
         if (txRepo.existsByIdempotencyKey(idempotencyKey))
             throw new RuntimeException("Duplicate transaction request");
 
-        // ✅ Lock property for update (prevent overselling)
         Property p = propRepo.findByIdForUpdate(propertyId).orElseThrow();
         String rKey = "reserve:" + propertyId + ":" + investorId;
 
@@ -149,11 +147,9 @@ public class PaymentService {
             throw new RuntimeException("Not enough tokens available");
         }
 
-        // ✅ Token price calculation
         BigDecimal base = BigDecimal.valueOf(p.getTokenPrice()).multiply(BigDecimal.valueOf(tokens));
         BigDecimal total = base;
 
-        // ✅ Wallet + custody mode checks
         User u = userRepo.findById(investorId).orElseThrow();
         boolean hasWallet = walletRepo.existsByUserId(investorId);
         boolean needFee = "CUSTODIAL".equals(u.getCustodyMode()) && !hasWallet;
@@ -228,7 +224,6 @@ public class PaymentService {
                 String paymentId = payment.getString("id");
                 double amount = payment.getDouble("amount") / 100.0;
 
-                // ✅ Fetch transaction safely using Optional
                 Transaction txn = txRepo.findByRazorpayOrderId(orderId).orElse(null);
 
                 if (txn != null) {

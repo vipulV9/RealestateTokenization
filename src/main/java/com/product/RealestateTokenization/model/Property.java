@@ -14,7 +14,8 @@ import java.util.List;
 @Data
 
 public class Property {
-    @Id @GeneratedValue private Long id;
+    @Id @GeneratedValue(strategy = GenerationType.AUTO)
+    private Long id;
     private String name , tokenSymbol, status = "CREATED", spvId;
     private double propertyValue, tokenPrice;
     private double currentValue;

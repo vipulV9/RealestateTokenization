@@ -152,5 +152,11 @@ public class AdminActionService {
     }
 
 
+    public List<Transaction> getAllTransaction()
+    {
+        return txRepo.findAll();
+    }
+
+
 
 }

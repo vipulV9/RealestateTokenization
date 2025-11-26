@@ -6,7 +6,8 @@ import lombok.Data;
 @Entity
 @Data
 public class Transaction {
-    @Id @GeneratedValue private Long id;
+    @Id @GeneratedValue(strategy = GenerationType.AUTO)
+    private Long id;
     private Long userId, propertyId;
     private int tokens;
     private double amount;

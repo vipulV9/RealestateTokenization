@@ -1,7 +1,9 @@
 package com.product.RealestateTokenization.controller;
 
 import com.product.RealestateTokenization.model.User;
+import com.product.RealestateTokenization.service.JwtService;
 import com.product.RealestateTokenization.service.UserService;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -16,6 +18,8 @@ public class AuthController {
     public AuthController(UserService userService) {
         this.userService = userService;
     }
+
+
 
     @PostMapping("/register")
     public ResponseEntity<User> register(@RequestBody RegisterRequest req) {
