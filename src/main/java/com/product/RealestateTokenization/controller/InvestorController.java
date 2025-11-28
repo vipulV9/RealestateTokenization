@@ -1,13 +1,14 @@
 package com.product.RealestateTokenization.controller;
 
 
-import com.product.RealestateTokenization.model.Property;
-import com.product.RealestateTokenization.model.User;
-import com.product.RealestateTokenization.model.Wallet;
+import com.product.RealestateTokenization.model.*;
+import com.product.RealestateTokenization.repository.TransactionRepo;
 import com.product.RealestateTokenization.service.PaymentService;
 import com.product.RealestateTokenization.service.PropertyService;
+import com.product.RealestateTokenization.service.UserService;
 import com.product.RealestateTokenization.service.WalletService;
 import com.razorpay.Order;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -27,6 +28,12 @@ public class InvestorController {
     private final PropertyService propertyService;
     private final WalletService walletService;
     private final PaymentService paymentService;
+
+    @Autowired
+    UserService userService;
+
+    @Autowired
+    TransactionRepo transactionRepo;
 
     public InvestorController(PropertyService propertyService, WalletService walletService, PaymentService paymentService) {
         this.propertyService = propertyService;
@@ -127,18 +134,54 @@ public Wallet getWallet() {
         return ResponseEntity.ok("Sell request created");
     }
 
-    @PostMapping("/wallet/address")
-    public ResponseEntity<?> setAddress(@RequestBody AddressRequest req) {
-        Long userId = getCurrentUserId();
-        walletService.setInvestorAddress(userId, req.address());
-        return ResponseEntity.ok("Address saved");
-    }
+//    @PostMapping("/wallet/address")
+//    public ResponseEntity<?> setAddress(@RequestBody AddressRequest req) {
+//        Long userId = getCurrentUserId();
+//        walletService.setInvestorAddress(userId, req.address());
+//        return ResponseEntity.ok("Address saved");
+//    }
 
 
     private Long getCurrentUserId() {
         return (Long) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
     }
+// =========== ADD THESE TO InvestorController.java ===========
 
+    @GetMapping("/me")
+    public ResponseEntity<UserProfileDTO> getMyProfile() {
+        Long userId = getCurrentUserId();
+        User user = userService.getUser(userId);
+
+        UserProfileDTO dto = new UserProfileDTO(
+                user.getId(),
+                user.getName(),
+                user.getEmail(),
+                user.getPhone(),
+                user.getKycStatus(),
+                user.getCustodyMode()
+        );
+        return ResponseEntity.ok(dto);
+    }
+
+    @GetMapping("/portfolio")
+    public ResponseEntity<UserInvestmentDTO> getMyPortfolio() {
+        Long userId = getCurrentUserId();
+
+        // Reuse the same powerful logic that admin uses, but filtered to current user
+        User user = userService.getUser(userId);
+
+        // We'll create a helper method in UserService for single user
+        UserInvestmentDTO portfolio = userService.getUserInvestmentDetails(userId);
+
+        return ResponseEntity.ok(portfolio);
+    }
+
+    // Optional: Transaction history
+    @GetMapping("/transactions")
+    public List<Transaction> getMyTransactions() {
+        Long userId = getCurrentUserId();
+        return transactionRepo.findByUserId(userId);
+    }
 
 }
 

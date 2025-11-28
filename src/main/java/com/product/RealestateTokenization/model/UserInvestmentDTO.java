@@ -23,3 +23,4 @@ public record UserInvestmentDTO(
             double currentValue
     ) {}
 }
+

@@ -43,16 +43,18 @@ public class OAuth2AuthenticationSuccessHandler implements AuthenticationSuccess
 
         String jwt = jwtService.generateToken(user);
 
-        // Detect if this user is admin
-        boolean isAdmin = user.getRole().equals("ADMIN");
-        String redirectUrl = isAdmin
-                ? "http://localhost:5173/oauth2-redirect?token=" + jwt
-                : "http://localhost:5173/oauth2-redirect?token=" + jwt;
+        boolean isAdmin = user.getRole().equalsIgnoreCase("ADMIN");
 
+        String redirectUrl;
 
+        if (isAdmin) {
+            // ADMIN → 5173
+            redirectUrl = "http://localhost:5173/admin?token=" + jwt;
+        } else {
+            // INVESTOR → 5174
+            redirectUrl = "http://localhost:5174/oauth2-redirect?token=" + jwt;
+        }
 
         response.sendRedirect(redirectUrl);
     }
-
-
 }

@@ -150,4 +150,61 @@ public class UserService {
         }).toList();
     }
 
+    // Add this method to UserService.java (reuse the same logic as admin)
+
+    public UserInvestmentDTO getUserInvestmentDetails(Long userId) {
+        User user = userRepo.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        List<Transaction> txns = txRepo.findByUserIdAndStatus(userId, TransactionStatus.COMPLETED);
+
+        double totalInvested = txns.stream()
+                .mapToDouble(Transaction::getAmount)
+                .sum();
+
+        Map<Long, List<Transaction>> byProperty = txns.stream()
+                .collect(Collectors.groupingBy(Transaction::getPropertyId));
+
+        List<UserInvestmentDTO.PropertyHolding> holdings = byProperty.entrySet().stream()
+                .map(entry -> {
+                    Long propertyId = entry.getKey();
+                    List<Transaction> propTxns = entry.getValue();
+
+                    Property p = propertyRepo.findById(propertyId).orElse(null);
+                    if (p == null) return null;
+
+                    int tokensOwned = propTxns.stream().mapToInt(Transaction::getTokens).sum();
+                    double investedAmount = propTxns.stream().mapToDouble(Transaction::getAmount).sum();
+                    double currentValue = tokensOwned * p.getTokenPrice();
+
+                    return new UserInvestmentDTO.PropertyHolding(
+                            p.getId(),
+                            p.getName(),
+                            p.getTokenSymbol(),
+                            tokensOwned,
+                            p.getTokenPrice(),
+                            investedAmount,
+                            currentValue
+                    );
+                })
+                .filter(Objects::nonNull)
+                .toList();
+
+        double portfolioValue = holdings.stream()
+                .mapToDouble(UserInvestmentDTO.PropertyHolding::currentValue)
+                .sum();
+
+        return new UserInvestmentDTO(
+                user.getId(),
+                user.getName(),
+                user.getEmail(),
+                user.getPhone(),
+                user.getKycStatus(),
+                user.getCustodyMode(),
+                totalInvested,
+                portfolioValue,
+                holdings
+        );
+    }
+
 }
