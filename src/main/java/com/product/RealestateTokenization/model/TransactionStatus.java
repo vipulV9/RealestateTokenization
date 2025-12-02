@@ -5,5 +5,6 @@ public enum TransactionStatus {
     PAYMENT_RECEIVED_PENDING_ADMIN,
     COMPLETED,
     REFUNDED,
-    FAILED
+    FAILED,
+    RENT_DISTRIBUTION
 }

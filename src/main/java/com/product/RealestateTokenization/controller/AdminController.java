@@ -24,8 +24,11 @@ public class AdminController {
     @Autowired
     WalletService walletService;
 
+    @Autowired
+
     private final PropertyService propertyService;
     private final AdminActionService adminService;
+    private  RentService rentService;
 
     public AdminController(PropertyService propertyService, AdminActionService adminService) {
         this.propertyService = propertyService;
@@ -160,6 +163,16 @@ public ResponseEntity<PropertyResponse> createProperty(
     public List<Wallet> getallwallet()
     {
         return  walletService.getAllWallet();
+    }
+
+
+
+
+    // Add endpoint
+    @PostMapping("/properties/{id}/distribute-rent")
+    public ResponseEntity<RentDistribution> distributePropertyRent(@PathVariable Long id) throws Exception {
+        RentDistribution distribution = rentService.distributeRent(id);
+        return ResponseEntity.ok(distribution);
     }
 }
 

@@ -224,6 +224,10 @@ public Property broadcastSignedIssuance(Long id, String signedTxBlob) throws Exc
         if (req.tokenSymbol() != null)
             p.setTokenSymbol(req.tokenSymbol());
 
+        if (req.monthlyRent() != null) {
+            p.setMonthlyRent(req.monthlyRent());
+        }
+
         return repo.save(p);
     }
 

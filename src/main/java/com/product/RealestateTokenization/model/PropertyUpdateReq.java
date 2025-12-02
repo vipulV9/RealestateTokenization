@@ -7,5 +7,6 @@ public record PropertyUpdateReq(
         Integer totalTokens,
         Double tokenPrice,
         String spvId,
-        String tokenSymbol
+        String tokenSymbol,
+        Double monthlyRent
 ) {}

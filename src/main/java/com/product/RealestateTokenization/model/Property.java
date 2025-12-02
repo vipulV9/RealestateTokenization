@@ -46,6 +46,7 @@ public class Property {
     }
 
 
+    private double monthlyRent = 0.0;
 
 
     @ElementCollection

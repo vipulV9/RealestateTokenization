@@ -183,6 +183,12 @@ public Wallet getWallet() {
         return transactionRepo.findByUserId(userId);
     }
 
+    @GetMapping("/rent/history")
+    public List<Transaction> getMyRentHistory() {
+        Long userId = getCurrentUserId();
+        return transactionRepo.findByUserIdAndStatus(userId, TransactionStatus.RENT_DISTRIBUTION);
+    }
+
 }
 
 record OrderRequest(Long investorId, Long propertyId, int tokens, String idempotencyKey) {}

@@ -19,6 +19,10 @@ public class Transaction {
     private boolean walletCreationFee = false;
     private double walletFeeAmount = 0.0;
 
+    @ManyToOne
+    @JoinColumn(name = "rent_distribution_id")
+    private RentDistribution rentDistribution;
+
     public void setXrplTxHash(String hash) { this.xrplTxHash = hash; }
     public void setStatus(TransactionStatus status) { this.status = status; }
     public void setWalletCreationFee(boolean flag) { this.walletCreationFee = flag; }

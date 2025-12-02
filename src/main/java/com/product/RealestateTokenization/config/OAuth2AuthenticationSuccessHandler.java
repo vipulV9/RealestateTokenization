@@ -52,7 +52,7 @@ public class OAuth2AuthenticationSuccessHandler implements AuthenticationSuccess
             redirectUrl = "http://localhost:5173/admin?token=" + jwt;
         } else {
             // INVESTOR → 5174
-            redirectUrl = "http://localhost:5174/oauth2-redirect?token=" + jwt;
+            redirectUrl = "http://localhost:5173/oauth2-redirect?token=" + jwt;
         }
 
         response.sendRedirect(redirectUrl);

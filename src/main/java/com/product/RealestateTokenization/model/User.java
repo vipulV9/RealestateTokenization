@@ -11,6 +11,22 @@ public class User {
     private Long id;
     private String name, email, phone, passwordHash, role = "INVESTOR", custodyMode = "NON_CUSTODIAL";
     private String kycStatus = "PENDING";
+
+    private String bankAccountNumber;
+    private String bankIfsc;
+    private String beneficiaryName;
+    private String razorpayFundAccountId;
+    private String panNumber;
+    private boolean phoneVerified = false;
+
+    public boolean isPhoneVerified() {
+        return phoneVerified;
+    }
+
+    public void setPhoneVerified(boolean phoneVerified) {
+        this.phoneVerified = phoneVerified;
+    }
+
     public void setKycStatus(String status) { this.kycStatus = status; }
 }
 /*
@@ -19,7 +35,6 @@ public class User {
 # ==============================
 MYSQL_USER=root
 MYSQL_PASSWORD=secret
-
 # ==============================
 # RAZORPAY (TEST MODE)
 # ==============================

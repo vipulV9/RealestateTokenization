@@ -4,9 +4,13 @@ import com.product.RealestateTokenization.model.*;
 import com.product.RealestateTokenization.repository.PropertyRepo;
 import com.product.RealestateTokenization.repository.TransactionRepo;
 import com.product.RealestateTokenization.repository.UserRepo;
+import com.product.RealestateTokenization.xrpl.RazorpayPayoutService;
+import com.razorpay.RazorpayException;
+import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
@@ -20,6 +24,9 @@ public class UserService {
     private final UserRepo userRepo;
     private final PasswordEncoder encoder;
     private final JwtService jwtService; // <-- Inject JwtService
+
+    @Autowired
+    RazorpayPayoutService razorpayPayoutService;
 
     public UserService(UserRepo userRepo, PasswordEncoder encoder, JwtService jwtService) {
         this.userRepo = userRepo;
@@ -205,6 +212,58 @@ public class UserService {
                 portfolioValue,
                 holdings
         );
+    }
+    @Transactional
+    public void updateBankDetails(Long userId, String accountNumber, String ifsc, String beneficiaryName) throws Exception {
+
+        User user = getUser(userId);
+        user.setBankAccountNumber(accountNumber);
+        user.setBankIfsc(ifsc);
+        user.setBeneficiaryName(beneficiaryName);
+
+        // -------------------
+        // CREATE CONTACT FIRST
+        // -------------------
+        JSONObject contact = new JSONObject();
+        contact.put("name", user.getName());
+        contact.put("email", user.getEmail());
+        contact.put("contact", user.getPhone());
+        contact.put("type", "customer");
+        contact.put("reference_id", "user_" + userId);
+
+        JSONObject contactResponse = razorpayPayoutService.createContact(contact);
+        String contactId = contactResponse.getString("id");
+
+        // -------------------------
+        // CREATE FUND ACCOUNT REST
+        // -------------------------
+        JSONObject bankAccount = new JSONObject();
+        bankAccount.put("account_number", accountNumber);
+        bankAccount.put("ifsc", ifsc);
+        bankAccount.put("beneficiary_name", beneficiaryName);
+
+        JSONObject fundRequest = new JSONObject();
+        fundRequest.put("contact_id", contactId);
+        fundRequest.put("account_type", "bank_account");
+        fundRequest.put("bank_account", bankAccount);
+
+        JSONObject fundResponse = razorpayPayoutService.createFundAccount(fundRequest);
+        String fundAccountId = fundResponse.getString("id");
+
+        // save Razorpay fund account ID
+        user.setRazorpayFundAccountId(fundAccountId);
+        userRepo.save(user);
+    }
+    @Transactional
+    public void markPhoneAsVerified(String fullPhoneNumber) {
+        // Normalize: remove +, spaces
+        String cleanPhone = fullPhoneNumber.replaceAll("[^0-9]", "");
+
+        userRepo.findByPhoneEndingWith(cleanPhone.substring(cleanPhone.length() - 10))
+                .ifPresent(user -> {
+                    user.setPhoneVerified(true);
+                    userRepo.save(user);
+                });
     }
 
 }
