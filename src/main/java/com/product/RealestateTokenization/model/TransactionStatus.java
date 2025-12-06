@@ -6,5 +6,7 @@ public enum TransactionStatus {
     COMPLETED,
     REFUNDED,
     FAILED,
-    RENT_DISTRIBUTION
+    RENT_DISTRIBUTION,
+    PENDING_INTEREST,           // New
+    DOCS_SENT,
 }

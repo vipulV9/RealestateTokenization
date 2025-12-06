@@ -6,12 +6,17 @@ import com.razorpay.Order;
 import com.razorpay.RazorpayClient;
 import com.razorpay.Utils;
 import org.json.JSONObject;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -19,20 +24,30 @@ import java.util.concurrent.TimeUnit;
 @Service
 public class PaymentService {
 
+
+    @Value("${razorpay.key-id}")
+    private String key;
+
+    @Value("${razorpay.key-secret}")
+    private String secret;
+
+    @Autowired
+    WebClient webClient;   // ✅ ADD THIS FIELD
+
     private final RazorpayClient razorpay;
     private final RedisTemplate<String, String> redis;
     private final TransactionRepo txRepo;
     private final PropertyRepo propRepo;
     private final UserRepo userRepo;
     private final WalletRepo walletRepo;
-
    public PaymentService(RazorpayClient razorpay, RedisTemplate<String, String> redis, TransactionRepo txRepo,
-                         PropertyRepo propRepo, UserRepo userRepo, WalletRepo walletRepo) {
+                         PropertyRepo propRepo, UserRepo userRepo, WalletRepo walletRepo, EmailService emailService, WebClient webClient) {
       this.razorpay = razorpay;
        this.redis = redis;
         this.txRepo = txRepo;this.propRepo = propRepo;
        this.userRepo = userRepo;
         this.walletRepo = walletRepo;
+       this.webClient = webClient;
    }
 //
 //    @Transactional
@@ -259,5 +274,52 @@ public class PaymentService {
             return "Webhook Error: " + e.getMessage();
         }
     }
+
+
+
+
+
+
+        public JSONObject createPaymentLink(String name, String email, String phone, double amount, String referenceId, String propertyName) {
+
+            try {
+                // Razorpay Basic Auth (base64 encoded)
+                String auth = key + ":" + secret;
+                String base64Auth = Base64.getEncoder().encodeToString(auth.getBytes(StandardCharsets.UTF_8));
+
+                JSONObject customer = new JSONObject();
+                customer.put("name", name);
+                customer.put("email", email);
+                customer.put("contact", phone);
+
+                JSONObject body = new JSONObject();
+                body.put("amount", (int)(amount * 100));
+                body.put("currency", "INR");
+                body.put("reference_id", referenceId);
+                body.put("description", "Investment Payment");
+                body.put("customer", customer);
+                body.put("callback_url", "https://yourdomain.com/payment-success");
+                body.put("callback_method", "get");
+
+                // Make API Call
+                String response = webClient.post()
+                        .uri("https://api.razorpay.com/v1/payment_links")
+                        .header("Authorization", "Basic " + base64Auth)
+                        .header("Content-Type", "application/json")
+                        .body(Mono.just(body.toString()), String.class)
+                        .retrieve()
+                        .bodyToMono(String.class)
+                        .block();
+
+                return new JSONObject(response);
+
+            } catch (Exception e) {
+                throw new RuntimeException("Error creating payment link: " + e.getMessage());
+            }
+        }
+
+
+
+
 
 }

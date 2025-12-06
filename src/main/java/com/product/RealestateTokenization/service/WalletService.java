@@ -37,7 +37,9 @@ public class WalletService {
         this.xrpl = xrpl;
         this.userService = userService;
     }
-
+    public boolean existsByUserId(Long userId) {
+        return repo.existsByUserId(userId);
+    }
     public Wallet ensureWallet(User user, Transaction tx) {
         return repo.findByUserId(user.getId())
                 .orElseGet(() -> createCustodialWallet(user, tx));

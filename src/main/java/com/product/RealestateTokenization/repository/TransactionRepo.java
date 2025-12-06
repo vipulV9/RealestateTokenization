@@ -30,4 +30,15 @@ public interface TransactionRepo extends JpaRepository<Transaction, Long> {
     List<Transaction> findByUserIdAndStatus(Long userId, TransactionStatus status);
 
     List<Transaction> findByUserId(Long userId);
+
+    // ADD THESE TWO METHODS (this fixes your error)
+    boolean existsByUserIdAndPropertyIdAndStatusIn(
+            Long userId,
+            Long propertyId,
+            List<TransactionStatus> statuses);
+
+    boolean existsByUserIdAndPropertyIdAndStatus(
+            Long userId,
+            Long propertyId,
+            TransactionStatus status);
 }

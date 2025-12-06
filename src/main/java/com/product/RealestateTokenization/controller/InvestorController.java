@@ -3,11 +3,9 @@ package com.product.RealestateTokenization.controller;
 
 import com.product.RealestateTokenization.model.*;
 import com.product.RealestateTokenization.repository.TransactionRepo;
-import com.product.RealestateTokenization.service.PaymentService;
-import com.product.RealestateTokenization.service.PropertyService;
-import com.product.RealestateTokenization.service.UserService;
-import com.product.RealestateTokenization.service.WalletService;
+import com.product.RealestateTokenization.service.*;
 import com.razorpay.Order;
+import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -34,6 +32,9 @@ public class InvestorController {
 
     @Autowired
     TransactionRepo transactionRepo;
+
+    @Autowired
+    EmailService emailService;
 
     public InvestorController(PropertyService propertyService, WalletService walletService, PaymentService paymentService) {
         this.propertyService = propertyService;
@@ -188,7 +189,77 @@ public Wallet getWallet() {
         Long userId = getCurrentUserId();
         return transactionRepo.findByUserIdAndStatus(userId, TransactionStatus.RENT_DISTRIBUTION);
     }
+    @PostMapping("/properties/{id}/express-interest")
+    public ResponseEntity<?> expressInterest(
+            @PathVariable Long id,
+            @RequestBody Map<String, Object> payload) throws Exception {
 
+        Long userId = getCurrentUserId();
+        int tokens = (Integer) payload.get("tokens");
+
+        User user = userService.getUser(userId);
+        Property property = propertyService.getProperty(id);
+
+        if (tokens <= 0 || tokens > property.getAvailableTokens()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Invalid number of tokens"));
+        }
+
+        // Prevent duplicate interest
+        if (transactionRepo.existsByUserIdAndPropertyIdAndStatusIn(userId, id,
+                List.of(TransactionStatus.PENDING_INTEREST))) {
+            return ResponseEntity.badRequest().body(Map.of("error", "You already expressed interest"));
+        }
+
+        double baseAmount = tokens * property.getTokenPrice();
+        double totalAmount = baseAmount;
+        boolean needsFee = "CUSTODIAL".equals(user.getCustodyMode()) && !walletService.existsByUserId(userId);
+        if (needsFee) totalAmount += 800;
+
+        String referenceId = "INV_" + userId + "_" + id + "_" + System.currentTimeMillis();
+
+        // Create Payment Link via your method
+        JSONObject linkResponse = paymentService.createPaymentLink(
+                user.getName(),
+                user.getEmail(),
+                user.getPhone(),
+                totalAmount,
+                referenceId,
+                property.getName());
+
+        String paymentLinkUrl = linkResponse.getString("short_url");
+        String paymentLinkId = linkResponse.getString("id");
+
+        // Save Transaction
+        Transaction tx = new Transaction();
+        tx.setUserId(userId);
+        tx.setPropertyId(id);
+        tx.setTokens(tokens);
+        tx.setAmount(totalAmount);
+        tx.setRazorpayOrderId(paymentLinkId);           // This is Payment Link ID
+        tx.setIdempotencyKey(referenceId);
+        tx.setStatus(TransactionStatus.PENDING_INTEREST);
+        tx.setWalletCreationFee(needsFee);
+        tx.setWalletFeeAmount(needsFee ? 800.0 : 0.0);
+        transactionRepo.save(tx);
+
+        // Send Email
+        emailService.sendInterestEmail(
+                user.getEmail(),
+                user.getName(),
+                property.getName(),
+                property.getTokenSymbol(),
+                tokens,
+                property.getTokenPrice(),
+                totalAmount,
+                paymentLinkUrl,
+                needsFee
+        );
+
+        return ResponseEntity.ok(Map.of(
+                "message", "Thank you! Please check your email for payment instructions.",
+                "payment_link", paymentLinkUrl
+        ));
+    }
 }
 
 record OrderRequest(Long investorId, Long propertyId, int tokens, String idempotencyKey) {}
