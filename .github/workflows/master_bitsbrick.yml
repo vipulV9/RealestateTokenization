@@ -13,7 +13,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: read #This is required for actions/checkout
+      contents: read
 
     steps:
       - uses: actions/checkout@v4
@@ -24,14 +24,19 @@ jobs:
           java-version: '17'
           distribution: 'microsoft'
 
-      - name: Build with Maven
-        run: mvn clean install
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build with Gradle
+        run: ./gradlew clean build
+        # OR for Spring Boot:
+        # run: ./gradlew bootJar
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
         with:
           name: java-app
-          path: '${{ github.workspace }}/target/*.jar'
+          path: build/libs/*.jar
 
   deploy:
     runs-on: ubuntu-latest
@@ -60,4 +65,5 @@ jobs:
           app-name: 'BitsBrick'
           slot-name: 'Production'
           package: '*.jar'
+
           
