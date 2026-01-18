@@ -24,8 +24,9 @@ public class AdminController {
     @Autowired
     WalletService walletService;
 
-    @Autowired
 
+
+    @Autowired
     private final PropertyService propertyService;
     private final AdminActionService adminService;
     private  RentService rentService;
@@ -174,7 +175,9 @@ public ResponseEntity<PropertyResponse> createProperty(
         RentDistribution distribution = rentService.distributeRent(id);
         return ResponseEntity.ok(distribution);
     }
+
 }
 
 record PropertyResponse(Long id) {}
 record SignedTxUploadReq(String signedTxBlob) {}
+record ChatSession(String sessionId, String investorName, List<ChatMessage> messages) {}

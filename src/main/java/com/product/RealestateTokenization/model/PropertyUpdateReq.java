@@ -8,5 +8,10 @@ public record PropertyUpdateReq(
         Double tokenPrice,
         String spvId,
         String tokenSymbol,
-        Double monthlyRent
+        Double monthlyRent,
+        String spvBankAccountNumber,
+        String spvBankIfsc,
+        String spvBeneficiaryName,
+        String pas4DocumentUrl,
+        Double annualRoiPercentage
 ) {}

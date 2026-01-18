@@ -5,6 +5,7 @@ import com.product.RealestateTokenization.model.*;
 import com.product.RealestateTokenization.repository.TransactionRepo;
 import com.product.RealestateTokenization.service.*;
 import com.razorpay.Order;
+import jakarta.mail.MessagingException;
 import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -51,6 +52,20 @@ public class InvestorController {
     public Property getProperty(@PathVariable Long id) {
         return propertyService.getProperty(id);
     }
+
+    @GetMapping("/properties/by-type")
+    public ResponseEntity<List<Property>> getPropertiesByType(
+            @RequestParam String type
+    ) {
+        return ResponseEntity.ok(propertyService.getPropByType(type));
+    }
+
+    @GetMapping("/properties/by-types")
+    public List<Property> getByTypes(@RequestParam String types) {
+        return propertyService.getPropsByTypes(types);
+    }
+
+
 
 //    @PostMapping("/payment/create-order")
 //    public ResponseEntity<?> createOrder(@RequestBody OrderRequest req) {
@@ -189,79 +204,174 @@ public Wallet getWallet() {
         Long userId = getCurrentUserId();
         return transactionRepo.findByUserIdAndStatus(userId, TransactionStatus.RENT_DISTRIBUTION);
     }
-    @PostMapping("/properties/{id}/express-interest")
-    public ResponseEntity<?> expressInterest(
-            @PathVariable Long id,
-            @RequestBody Map<String, Object> payload) throws Exception {
+//    @PostMapping("/properties/{id}/express-interest")
+//    public ResponseEntity<?> expressInterest(
+//            @PathVariable Long id,
+//            @RequestBody Map<String, Object> payload) throws Exception {
+//
+//        Long userId = getCurrentUserId();
+//        int tokens = (Integer) payload.get("tokens");
+//
+//        User user = userService.getUser(userId);
+//        Property property = propertyService.getProperty(id);
+//
+//        if (tokens <= 0 || tokens > property.getAvailableTokens()) {
+//            return ResponseEntity.badRequest().body(Map.of("error", "Invalid number of tokens"));
+//        }
+//
+//        // Prevent duplicate interest
+//        if (transactionRepo.existsByUserIdAndPropertyIdAndStatusIn(userId, id,
+//                List.of(TransactionStatus.PENDING_INTEREST))) {
+//            return ResponseEntity.badRequest().body(Map.of("error", "You already expressed interest"));
+//        }
+//        double baseAmount = tokens * property.getTokenPrice();
+//        double totalAmount = baseAmount;
+//        boolean needsFee = "CUSTODIAL".equals(user.getCustodyMode()) && !walletService.existsByUserId(userId);
+//        if (needsFee) totalAmount += 800;
+//
+//        String referenceId = "INV_" + userId + "_" + id + "_" + System.currentTimeMillis();
+//
+//        // Create Payment Link via your method
+//        JSONObject linkResponse = paymentService.createPaymentLink(
+//                user.getName(),
+//                user.getEmail(),
+//                user.getPhone(),
+//                totalAmount,
+//                referenceId,
+//                property.getName());
+//
+//        String paymentLinkUrl = linkResponse.getString("short_url");
+//        String paymentLinkId = linkResponse.getString("id");
+//
+//        // Save Transaction
+//        Transaction tx = new Transaction();
+//        tx.setUserId(userId);
+//        tx.setPropertyId(id);
+//        tx.setTokens(tokens);
+//        tx.setAmount(totalAmount);
+//        tx.setRazorpayOrderId(paymentLinkId);           // This is Payment Link ID
+//        tx.setIdempotencyKey(referenceId);
+//        tx.setStatus(TransactionStatus.PENDING_INTEREST);
+//        tx.setWalletCreationFee(needsFee);
+//        tx.setWalletFeeAmount(needsFee ? 800.0 : 0.0);
+//        transactionRepo.save(tx);
+//
+//        // Send Email
+//        emailService.sendInterestEmail(
+//                user.getEmail(),
+//                user.getName(),
+//                property.getName(),
+//                property.getTokenSymbol(),
+//                tokens,
+//                property.getTokenPrice(),
+//                totalAmount,
+//                paymentLinkUrl,
+//                needsFee
+//        );
+//
+//        return ResponseEntity.ok(Map.of(
+//                "message", "Thank you! Please check your email for payment instructions.",
+//                "payment_link", paymentLinkUrl
+//        ));
+//    }
+@PostMapping("/properties/{id}/buy")  // CHANGED: Renamed from express-interest for clarity
+public ResponseEntity<?> buyTokens(
+        @PathVariable Long id,
+        @RequestBody Map<String, Object> payload) throws Exception {
 
-        Long userId = getCurrentUserId();
-        int tokens = (Integer) payload.get("tokens");
+    Long userId = getCurrentUserId();
+    int tokens = (Integer) payload.get("tokens");
 
-        User user = userService.getUser(userId);
-        Property property = propertyService.getProperty(id);
+    User user = userService.getUser(userId);
+    Property property = propertyService.getProperty(id);
 
-        if (tokens <= 0 || tokens > property.getAvailableTokens()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Invalid number of tokens"));
+    if (tokens <= 0 || tokens > property.getAvailableTokens()) {
+        return ResponseEntity.badRequest().body(Map.of("error", "Invalid number of tokens"));
+    }
+
+//    // Prevent duplicate pending buys
+//    if (transactionRepo.existsByUserIdAndPropertyIdAndStatusIn(userId, id,
+//            List.of(TransactionStatus.PAYMENT_RECEIVED_PENDING_ADMIN))) {
+//        return ResponseEntity.badRequest().body(Map.of("error", "You already have a pending purchase"));
+//    }
+
+    // Calculate amounts (include wallet fee if needed)
+    double baseAmount = tokens * property.getTokenPrice();
+    double totalAmount = baseAmount;
+    boolean needsFee = "CUSTODIAL".equals(user.getCustodyMode()) && !walletService.existsByUserId(userId);
+    if (needsFee) totalAmount += 800;
+
+    String referenceId = "INV_" + userId + "_" + id + "_" + System.currentTimeMillis();
+
+    // Save Transaction (pending admin confirm after offline payment)
+    Transaction tx = new Transaction();
+    tx.setUserId(userId);
+    tx.setPropertyId(id);
+    tx.setTokens(tokens);
+    tx.setAmount(totalAmount);
+    tx.setIdempotencyKey(referenceId);
+    tx.setStatus(TransactionStatus.PAYMENT_RECEIVED_PENDING_ADMIN);
+    tx.setWalletCreationFee(needsFee);
+    tx.setWalletFeeAmount(needsFee ? 800.0 : 0.0);
+    transactionRepo.save(tx);
+
+    // Send Email with SPV bank details and PAS-4
+    emailService.sendInvestmentEmail(
+            user.getEmail(),
+            user.getName(),
+            property.getName(),
+            property.getTokenSymbol(),           // SPV Name (token symbol)
+            tokens,                              // Shares applied
+            property.getTokenPrice(),            // Price per share
+            totalAmount,                         // Total investment amount (tokens * price + fee if any)
+            java.time.LocalDate.now(),           // Today's date as investmentDate
+            "U63120HR2025PTC139086"              // Replace with your actual CIN, or inject via @Value
+    );
+
+    return ResponseEntity.ok(Map.of(
+            "message", "Thank you! our team will contact you shortly"
+    ));
+}
+
+    @PostMapping("/listpropertyreq")
+    public ResponseEntity<?> submitPropertyListingInterest(
+            @RequestBody PropertyListingInterestReq req) throws MessagingException {
+
+        // Simple validation
+        if (req.name() == null || req.email() == null || req.phone() == null || req.city() == null) {
+            return ResponseEntity.badRequest()
+                    .body("Name, email, phone and city are required");
         }
 
-        // Prevent duplicate interest
-        if (transactionRepo.existsByUserIdAndPropertyIdAndStatusIn(userId, id,
-                List.of(TransactionStatus.PENDING_INTEREST))) {
-            return ResponseEntity.badRequest().body(Map.of("error", "You already expressed interest"));
-        }
-
-        double baseAmount = tokens * property.getTokenPrice();
-        double totalAmount = baseAmount;
-        boolean needsFee = "CUSTODIAL".equals(user.getCustodyMode()) && !walletService.existsByUserId(userId);
-        if (needsFee) totalAmount += 800;
-
-        String referenceId = "INV_" + userId + "_" + id + "_" + System.currentTimeMillis();
-
-        // Create Payment Link via your method
-        JSONObject linkResponse = paymentService.createPaymentLink(
-                user.getName(),
-                user.getEmail(),
-                user.getPhone(),
-                totalAmount,
-                referenceId,
-                property.getName());
-
-        String paymentLinkUrl = linkResponse.getString("short_url");
-        String paymentLinkId = linkResponse.getString("id");
-
-        // Save Transaction
-        Transaction tx = new Transaction();
-        tx.setUserId(userId);
-        tx.setPropertyId(id);
-        tx.setTokens(tokens);
-        tx.setAmount(totalAmount);
-        tx.setRazorpayOrderId(paymentLinkId);           // This is Payment Link ID
-        tx.setIdempotencyKey(referenceId);
-        tx.setStatus(TransactionStatus.PENDING_INTEREST);
-        tx.setWalletCreationFee(needsFee);
-        tx.setWalletFeeAmount(needsFee ? 800.0 : 0.0);
-        transactionRepo.save(tx);
-
-        // Send Email
-        emailService.sendInterestEmail(
-                user.getEmail(),
-                user.getName(),
-                property.getName(),
-                property.getTokenSymbol(),
-                tokens,
-                property.getTokenPrice(),
-                totalAmount,
-                paymentLinkUrl,
-                needsFee
+        // Send email to YOU (admin)
+        emailService.sendPropertyListingInterestEmail(
+                "vipulyadav3k@gmail.com",  // Change to your email
+                req.name(),
+                req.email(),
+                req.phone(),
+                req.city(),
+                req.propertyType(),
+                req.approxValue(),
+                req.message()
         );
 
-        return ResponseEntity.ok(Map.of(
-                "message", "Thank you! Please check your email for payment instructions.",
-                "payment_link", paymentLinkUrl
-        ));
+        return ResponseEntity.ok("""
+            {
+                "message": "Thank you! We have received your interest. Our team will contact you within 24-48 hours."
+            }
+            """);
     }
 }
 
 record OrderRequest(Long investorId, Long propertyId, int tokens, String idempotencyKey) {}
 record SellRequest(Long userId, int tokens) {}
 record AddressRequest(Long userId, String address) {}
+record PropertyListingInterestReq(
+        String name,
+        String email,
+        String phone,
+        String city,
+        String propertyType,        // e.g., Residential, Commercial, Plot, etc.
+        Double approxValue,         // in lakhs or crores
+        String message             // optional extra notes
+) {}

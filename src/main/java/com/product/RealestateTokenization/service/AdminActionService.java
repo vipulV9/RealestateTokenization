@@ -1,16 +1,20 @@
 package com.product.RealestateTokenization.service;
 
+import com.azure.security.keyvault.secrets.SecretClient;
 import com.product.RealestateTokenization.model.*;
 import com.product.RealestateTokenization.repository.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
+import java.util.Map;
 
 @Service
 @Transactional
 public class AdminActionService {
+    private final KeyVaultService  keyVaultService;
 
     private final TransactionRepo txRepo;
     private final WalletRepo walletRepo;
@@ -20,8 +24,9 @@ public class AdminActionService {
     private final UserRepo userRepo;
     private final WalletService walletService;
 
-    public AdminActionService(TransactionRepo txRepo, WalletRepo walletRepo, PropertyRepo propertyRepo,
+    public AdminActionService(KeyVaultService keyVaultService, TransactionRepo txRepo, WalletRepo walletRepo, PropertyRepo propertyRepo,
                               TokenOwnershipRepo ownershipRepo, XrplService xrplService, UserRepo userRepo, WalletService walletService) {
+        this.keyVaultService = keyVaultService;
         this.txRepo = txRepo;
         this.walletRepo = walletRepo;
         this.propertyRepo = propertyRepo;
@@ -67,11 +72,35 @@ public class AdminActionService {
             walletRepo.save(wallet);
         }
 
-        // ---- DECRYPT SECRET ----
-        String rawSecret = wallet.getSecretEncrypted();
-        // OR if Base64: String rawSecret = new String(Base64.getDecoder().decode(wallet.getSecretEncrypted()));
 
-        // ---- CHECK TRUSTLINE ----
+        //real funding of xrp
+        // ---- ENSURE XRP RESERVE ----
+//        if ("CUSTODIAL".equals(investor.getCustodyMode()) && !wallet.isFundedXrp()) {
+//
+//            // Call Node.js API to activate wallet with 1 XRP
+//            RestTemplate rest = new RestTemplate();
+//            rest.postForObject(
+//                    "http://localhost:3001/activate-wallet",
+//                    Map.of("investorAddress", wallet.getAddress()),
+//                    String.class
+//            );
+//            // Mark funded
+//            wallet.setFundedXrp(true);
+//            walletRepo.save(wallet);
+//        }
+
+
+        // ---- GET INVESTOR SEED FROM AZURE KEY VAULT ----
+        String rawSecret = keyVaultService.getSeed(
+                "investor-seed-" + investor.getId()
+        );
+
+
+        if (rawSecret == null || rawSecret.isBlank()) {
+            throw new RuntimeException("❌ Investor seed not found in Azure Key Vault");
+        }
+
+// ---- CHECK TRUSTLINE ----
         boolean hasTL = xrplService.investorHasTrustline(
                 wallet.getAddress(),
                 xrplService.getIssuerAddressString(),
@@ -80,7 +109,7 @@ public class AdminActionService {
 
         if (!hasTL) {
             String tl = xrplService.createInvestorTrustLine(
-                    rawSecret,
+                    investor.getId(),
                     xrplService.getIssuerAddressString(),
                     token,
                     "10000000000"
@@ -90,16 +119,20 @@ public class AdminActionService {
                 throw new RuntimeException("❌ Investor Trustline failed: " + tl);
             }
         }
-//        xrplService.clearNoRippleOnTrustline(
-//                xrplService.getColdWalletSecret(),     // ← COLD secret
-//                xrplService.getHotWalletAddress(),     // ← counterparty = Hot wallet
-//                "VIP",
-//                "0"                                    // ← keep limit 0 on Cold side (normal for issuer)
-//        );
-        String clearResult = xrplService.clearNoRippleOnTrustline(rawSecret, coldWalletAddress, token, "10000000000");
+
+// ---- CLEAR NORIPPLE ----
+        String clearResult = xrplService.clearNoRippleOnTrustline(
+                rawSecret,
+                coldWalletAddress,
+                token,
+                "10000000000"
+        );
+
         if (!clearResult.contains("OK")) {
             throw new RuntimeException("❌ Clear NoRipple failed: " + clearResult);
         }
+
+
         System.out.println("Investor wallet address = " + wallet.getAddress());
         System.out.println("Token = " + token);
         System.out.println("Amount = " + tx.getTokens());

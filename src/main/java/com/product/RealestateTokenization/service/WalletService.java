@@ -46,22 +46,26 @@ public class WalletService {
     }
 
     private Wallet createCustodialWallet(User user, Transaction tx) {
+
         if (!"CUSTODIAL".equals(user.getCustodyMode())) {
             throw new IllegalStateException("Custody mode not CUSTODIAL");
         }
 
-        WalletInfo info = xrpl.createWallet();
+        WalletInfo info = xrpl.createWallet(String.valueOf(user.getId()));
+
         Wallet w = new Wallet();
         w.setUser(user);
         w.setAddress(info.address());
-        w.setSecretEncrypted(info.encryptedSecret());
         w.setFundedXrp(false);
+
         repo.save(w);
 
         tx.setWalletCreationFee(true);
         tx.setWalletFeeAmount(800.0);
+
         return w;
     }
+
 
     public Wallet getWallet(Long userId) {
         return repo.findByUserId(userId).orElseThrow();

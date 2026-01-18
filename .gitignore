@@ -6,6 +6,7 @@ build/
 !**/src/test/**/build/
 
 ### STS ###
+application-prod.properties
 .apt_generated
 .classpath
 .factorypath

@@ -1,5 +1,6 @@
 package com.product.RealestateTokenization.service;
 
+import com.azure.security.keyvault.secrets.SecretClient;
 import com.google.common.primitives.UnsignedLong;
 import com.product.RealestateTokenization.util.CryptoUtil;
 import com.google.common.primitives.UnsignedInteger;
@@ -66,6 +67,7 @@ public class XrplService {
 
     @Autowired
     private CryptoUtil cryptoUtil;
+    private final SecretClient secretClient;
 
     private final XrplClient client;
     private final SignatureService signatureService = new BcSignatureService();
@@ -83,9 +85,11 @@ public class XrplService {
     private static final int DEFAULT_EXTRA_LEDGERS = 120; // ~8 minutes safety window
     private static final int DEFAULT_FEE_MULTIPLIER = 3;  // fee x3 by default
 
-    public XrplService() throws Exception {
+    public XrplService(SecretClient secretClient) throws Exception {
+        this.secretClient = secretClient;
         this.client = new XrplClient(HttpUrl.get("https://s.altnet.rippletest.net:51234"));
     }
+
     public KeyPair getColdWalletKeyPair() {
         try {
             Seed seed = Seed.fromBase58EncodedSecret(Base58EncodedSecret.of(coldWalletSeed));
@@ -111,17 +115,37 @@ public class XrplService {
 //        return new WalletInfo(address, encrypted);
 //    }
 
-    public WalletInfo createWallet() {
+//    public WalletInfo createWallet() {
+//        RestTemplate rest = new RestTemplate();
+//        Map result = rest.getForObject("http://localhost:3001/create-wallet", Map.class);
+//
+//        String address = (String) result.get("address");
+//        String seed = (String) result.get("seed");
+//
+//
+//        return new WalletInfo(address, seed);
+//    }
+
+    public WalletInfo createWallet(String investorId) {
+
         RestTemplate rest = new RestTemplate();
-        Map result = rest.getForObject("http://localhost:3001/create-wallet", Map.class);
+        Map result = rest.getForObject(
+                "http://localhost:3001/create-wallet",
+                Map.class
+        );
 
         String address = (String) result.get("address");
         String seed = (String) result.get("seed");
 
+        // 🔐 Store seed securely
+        secretClient.setSecret(
+                "investor-seed-" + investorId,
+                seed
+        );
 
-        return new WalletInfo(address, seed);
+        // ❌ DO NOT return seed
+        return new WalletInfo(address, null);
     }
-
 
 
 
@@ -528,73 +552,138 @@ public class XrplService {
             return false;
         }
     }
-    public String createInvestorTrustLine(String investorSecret, String issuerAddress, String currencyCode, String limitAmount) {
-        try {
-            // 1. Decode secret -> keypair
-            Seed seed = Seed.fromBase58EncodedSecret(Base58EncodedSecret.of(investorSecret));
-            KeyPair keyPair = seed.deriveKeyPair();
-            Address investor = keyPair.publicKey().deriveAddress();
+//    public String createInvestorTrustLine(String investorSecret, String issuerAddress, String currencyCode, String limitAmount) {
+//        try {
+//            // 1. Decode secret -> keypair
+//            Seed seed = Seed.fromBase58EncodedSecret(Base58EncodedSecret.of(investorSecret));
+//            KeyPair keyPair = seed.deriveKeyPair();
+//            Address investor = keyPair.publicKey().deriveAddress();
+//
+//            // 2. Autofill XRPL fields
+//            Map<String, Object> auto = autofillForAccount(investor, 20, 2);
+//            long feeDrops = (long) auto.get("feeDrops");
+//            UnsignedInteger sequence = (UnsignedInteger) auto.get("sequence");
+//            UnsignedInteger lastLedgerSequence = (UnsignedInteger) auto.get("lastLedgerSequence");
+//
+//            // 3. Build TrustSet tx
+//            TrustSet trust = TrustSet.builder()
+//                    .account(investor)
+//                    .fee(XrpCurrencyAmount.ofDrops(feeDrops))
+//                    .sequence(sequence)
+//                    .lastLedgerSequence(lastLedgerSequence)
+//                    .limitAmount(
+//                            IssuedCurrencyAmount.builder()
+//                                    .currency(currencyCode)
+//                                    .issuer(Address.of(issuerAddress))
+//                                    .value(limitAmount)
+//                                    .build()
+//                    )
+//                    .signingPublicKey(keyPair.publicKey())
+//                    .build();
+//
+//            // 4. SIGN OFFLINE
+//            SignatureService service = new BcSignatureService();
+//            SingleSignedTransaction<TrustSet> signed = service.sign(keyPair.privateKey(), trust);
+//
+//            // 5. Submit
+//            SubmitResult<TrustSet> result = client.submit(signed);
+//
+//            if (!"tesSUCCESS".equals(result.engineResult())) {
+//                return "❌ Trustline failed: " + result.engineResult() +
+//                        " - " + result.engineResultMessage();
+//            }
+//
+//            String txHash = result.transactionResult().hash().value();
+//
+//            // 6. Wait for validation (add this new block)
+//            int retries = 0;
+//            boolean validated = false;
+//            while (retries < 15) { // ~45-60 seconds max
+//                Thread.sleep(3000); // Wait 3 seconds between checks
+//                String status = checkTransactionStatus(txHash);
+//                if (status.contains("validated=true")) {
+//                    validated = true;
+//                    break;
+//                }
+//                retries++;
+//            }
+//
+//            if (validated) {
+//                return "Trustline OK. Hash: " + txHash;
+//            } else {
+//                return "❌ Trustline submitted but not validated in time: " + txHash +
+//                        ". It may have expired or failed—check XRPL explorer.";
+//            }
+//
+//        } catch (Exception e) {
+//            return "Trustline creation failed: " + e.getMessage();
+//        }
+//    }
+public String createInvestorTrustLine(
+        Long userId,
+        String issuerAddress,
+        String currencyCode,
+        String limitAmount
+) {
+    try {
+        // 1️⃣ GET SEED FROM AZURE KEY VAULT
+        String investorSeed = secretClient
+                .getSecret("investor-seed-" + userId)
+                .getValue();
 
-            // 2. Autofill XRPL fields
-            Map<String, Object> auto = autofillForAccount(investor, 20, 2);
-            long feeDrops = (long) auto.get("feeDrops");
-            UnsignedInteger sequence = (UnsignedInteger) auto.get("sequence");
-            UnsignedInteger lastLedgerSequence = (UnsignedInteger) auto.get("lastLedgerSequence");
-
-            // 3. Build TrustSet tx
-            TrustSet trust = TrustSet.builder()
-                    .account(investor)
-                    .fee(XrpCurrencyAmount.ofDrops(feeDrops))
-                    .sequence(sequence)
-                    .lastLedgerSequence(lastLedgerSequence)
-                    .limitAmount(
-                            IssuedCurrencyAmount.builder()
-                                    .currency(currencyCode)
-                                    .issuer(Address.of(issuerAddress))
-                                    .value(limitAmount)
-                                    .build()
-                    )
-                    .signingPublicKey(keyPair.publicKey())
-                    .build();
-
-            // 4. SIGN OFFLINE
-            SignatureService service = new BcSignatureService();
-            SingleSignedTransaction<TrustSet> signed = service.sign(keyPair.privateKey(), trust);
-
-            // 5. Submit
-            SubmitResult<TrustSet> result = client.submit(signed);
-
-            if (!"tesSUCCESS".equals(result.engineResult())) {
-                return "❌ Trustline failed: " + result.engineResult() +
-                        " - " + result.engineResultMessage();
-            }
-
-            String txHash = result.transactionResult().hash().value();
-
-            // 6. Wait for validation (add this new block)
-            int retries = 0;
-            boolean validated = false;
-            while (retries < 15) { // ~45-60 seconds max
-                Thread.sleep(3000); // Wait 3 seconds between checks
-                String status = checkTransactionStatus(txHash);
-                if (status.contains("validated=true")) {
-                    validated = true;
-                    break;
-                }
-                retries++;
-            }
-
-            if (validated) {
-                return "Trustline OK. Hash: " + txHash;
-            } else {
-                return "❌ Trustline submitted but not validated in time: " + txHash +
-                        ". It may have expired or failed—check XRPL explorer.";
-            }
-
-        } catch (Exception e) {
-            return "Trustline creation failed: " + e.getMessage();
+        if (investorSeed == null || investorSeed.isBlank()) {
+            throw new RuntimeException("Seed not found in Azure Key Vault");
         }
+
+        // 2️⃣ Decode seed -> keypair
+        Seed seed = Seed.fromBase58EncodedSecret(
+                Base58EncodedSecret.of(investorSeed)
+        );
+        KeyPair keyPair = seed.deriveKeyPair();
+        Address investor = keyPair.publicKey().deriveAddress();
+
+        // 3️⃣ Autofill
+        Map<String, Object> auto = autofillForAccount(investor, 20, 2);
+
+        TrustSet trust = TrustSet.builder()
+                .account(investor)
+                .fee(XrpCurrencyAmount.ofDrops((long) auto.get("feeDrops")))
+                .sequence((UnsignedInteger) auto.get("sequence"))
+                .lastLedgerSequence((UnsignedInteger) auto.get("lastLedgerSequence"))
+                .limitAmount(
+                        IssuedCurrencyAmount.builder()
+                                .currency(currencyCode.toUpperCase())
+                                .issuer(Address.of(issuerAddress))
+                                .value(limitAmount)
+                                .build()
+                )
+                .signingPublicKey(keyPair.publicKey())
+                .build();
+
+        // 4️⃣ Sign
+        SignatureService signatureService = new BcSignatureService();
+        SingleSignedTransaction<TrustSet> signed =
+                signatureService.sign(keyPair.privateKey(), trust);
+
+        // 5️⃣ Submit
+        SubmitResult<TrustSet> result = client.submit(signed);
+
+        if (!"tesSUCCESS".equals(result.engineResult())) {
+            throw new RuntimeException(
+                    result.engineResult() + " - " + result.engineResultMessage()
+            );
+        }
+
+        return "Trustline OK. Hash: " +
+                result.transactionResult().hash().value();
+
+    } catch (Exception e) {
+        e.printStackTrace();
+        throw new RuntimeException("❌ Investor Trustline failed", e);
     }
+}
+
+
     public String createHotWalletTrustLine(String hotSecret, String issuerAddress, String currency, String limit) {
         try {
             Seed seed = Seed.fromBase58EncodedSecret(Base58EncodedSecret.of(hotSecret));
@@ -708,7 +797,7 @@ public class XrplService {
 
     public String createHotWalletTrustLine(String currencyCode) {
         return createInvestorTrustLine(
-                hotWalletSeed,              // Hot wallet secret
+                Long.valueOf(hotWalletSeed),              // Hot wallet secret
                 coldWalletAddress,          // ✅ Trust the COLD wallet (issuer)
                 currencyCode,
                 "10000000000"

@@ -127,6 +127,7 @@ public class UserService {
                                 return new UserInvestmentDTO.PropertyHolding(
                                         p.getId(),
                                         p.getName(),
+                                        p.getPhotoUrls(),
                                         p.getTokenSymbol(),
                                         tokensOwned,
                                         p.getTokenPrice(),
@@ -187,6 +188,7 @@ public class UserService {
                     return new UserInvestmentDTO.PropertyHolding(
                             p.getId(),
                             p.getName(),
+                            p.getPhotoUrls(),
                             p.getTokenSymbol(),
                             tokensOwned,
                             p.getTokenPrice(),

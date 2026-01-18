@@ -16,7 +16,7 @@ import java.util.List;
 public class Property {
     @Id @GeneratedValue(strategy = GenerationType.AUTO)
     private Long id;
-    private String name , tokenSymbol, status = "CREATED", spvId;
+    private String name,about, tokenSymbol, status = "CREATED", spvId;
     private double propertyValue, tokenPrice;
     private double currentValue;
     private int totalTokens, availableTokens;
@@ -24,12 +24,20 @@ public class Property {
     private String unsignedTxBlob;
     @Embedded
     private Coordinates coordinates;
-    @Embedded
-    private Room room;
+    private double monthlyRent = 0.0;
+    @ManyToOne
+    @JoinColumn(name = "spv_company_id")
+    private SpvCompany spvCompany;
 
+    @Enumerated(EnumType.STRING)
+    private PropertyType type;
+
+//    @Embedded
+//    private Room room;
     @ElementCollection
     @CollectionTable(name = "property_rooms", joinColumns = @JoinColumn(name = "property_id"))
     private List<Room> rooms = new ArrayList<>();
+
 
     @Embeddable
     @Data
@@ -37,7 +45,9 @@ public class Property {
         private int value;
         private String type;
     }
+    private Double annualRoiPercentage;
 
+    String locationTitle;
     @Embeddable
     @Data
     public static class Coordinates {
@@ -46,15 +56,12 @@ public class Property {
     }
 
 
-    private double monthlyRent = 0.0;
-
 
     @ElementCollection
     @CollectionTable(name = "property_photos", joinColumns = @JoinColumn(name = "property_id"))
     @Column(name = "photo_url")
     private List<String> photoUrls = new ArrayList<>();
 
-    public void setSpvId(String spvId) { this.spvId = spvId; }
     public void setTokenPrice(double price) { this.tokenPrice = price; }
     public double getTokenPrice() { return tokenPrice; }
 }

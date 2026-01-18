@@ -20,10 +20,10 @@ public class RedisConfig {
     @Bean
     public LettuceConnectionFactory redisConnectionFactory() {
         RedisStandaloneConfiguration config = new RedisStandaloneConfiguration();
-        config.setHostName("redis-10023.c14.us-east-1-2.ec2.cloud.redislabs.com");
-        config.setPort(10023);
+        config.setHostName("redis-17452.c16.us-east-1-2.ec2.cloud.redislabs.com");
+        config.setPort(17452);
         config.setUsername("default");
-        config.setPassword("UbP3PqPMlio9BD6i3xlMjrJ7tKwWNpuA");   // ← your real password
+        config.setPassword("pFw53aAGSnQGQyQLUtUiX39eZcl7io8P");   // ← your real password
 
         // THIS LINE WORKS IN EVERY SPRING BOOT 3 VERSION
         LettuceConnectionFactory factory = new LettuceConnectionFactory(config);

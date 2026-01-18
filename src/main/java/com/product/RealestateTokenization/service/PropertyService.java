@@ -2,16 +2,16 @@ package com.product.RealestateTokenization.service;
 
 import com.cloudinary.Cloudinary;
 import com.cloudinary.utils.ObjectUtils;
-import com.product.RealestateTokenization.controller.PropertyCreateReq;
-import com.product.RealestateTokenization.model.Property;
-import com.product.RealestateTokenization.model.PropertyUpdateReq;
+import com.product.RealestateTokenization.model.*;
 import com.product.RealestateTokenization.repository.PropertyRepo;
+import com.product.RealestateTokenization.repository.SpvCompanyRepo;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -20,13 +20,16 @@ public class PropertyService {
 
     private final PropertyRepo repo;
     private final XrplService xrplService;
+    private final SpvCompanyRepo spvCompanyRepo;
+
 
     @Autowired
     private Cloudinary cloudinary;
 
-    public PropertyService(PropertyRepo repo, XrplService xrplService) {
+    public PropertyService(PropertyRepo repo, XrplService xrplService, SpvCompanyRepo spvCompanyRepo) {
         this.repo = repo;
         this.xrplService = xrplService;
+        this.spvCompanyRepo = spvCompanyRepo;
     }
 
 //    @Transactional
@@ -80,18 +83,48 @@ public class PropertyService {
     public Property createPropertyWithUnsignedTx(PropertyCreateReq req, List<MultipartFile> images) throws Exception {
         Property p = new Property();
         p.setName(req.name());
-
+        p.setAbout(req.about());
         Property.Coordinates coords = new Property.Coordinates();
         coords.setLat(req.lat());
         coords.setLng(req.lng());
         p.setCoordinates(coords);
-
         p.setPropertyValue(req.value());
         p.setCurrentValue(req.value());
         p.setTotalTokens(req.totalTokens());
+        p.setAvailableTokens(req.availableTokens());
         p.setTokenPrice(req.tokenPrice());
-        p.setSpvId(req.spvId());
+        p.setMonthlyRent(req.monthlyRent());
+        p.setAnnualRoiPercentage(req.annualRoiPercentage());
+
         p.setStatus("CREATED");
+
+        if (req.type() == null) {
+            throw new IllegalArgumentException("Property type is required");
+        }
+        p.setType(req.type());
+
+        if (req.spvCompany() == null) {
+            throw new IllegalArgumentException("SPV company details are required");
+        }
+
+        PropertyCreateReq.SpvCompanyReq s = req.spvCompany();
+
+        SpvCompany spv = new SpvCompany();
+        spv.setName(s.name());
+        spv.setCin(s.cin());
+        spv.setRegisteredAddress(s.registeredAddress());
+        spv.setEmail(s.email());
+        spv.setDirectorName(s.directorName());
+        spv.setDirectorDin(s.directorDin());
+        spv.setSigningPlace(s.signingPlace());
+        spv.setBankAccountNumber(s.bankAccountNumber());
+        spv.setBankIfsc(s.bankIfsc());
+        spv.setBeneficiaryName(s.beneficiaryName());
+
+        spv = spvCompanyRepo.save(spv);   // ✅ SAVED HERE
+
+        p.setSpvCompany(spv);             // ✅ LINKED HERE
+        p.setSpvId(spv.getId().toString());
 
         // ------------ ADD ROOMS (not hardcoded) ----------
         if (req.rooms() != null && !req.rooms().isEmpty()) {
@@ -113,8 +146,7 @@ public class PropertyService {
         }
         p.setTokenSymbol(tokenSymbol);
 
-        // Initially no tokens distributed
-        p.setAvailableTokens(0);
+        
 
         // Cloudinary upload
         List<String> uploadedUrls = new ArrayList<>();
@@ -149,6 +181,43 @@ public class PropertyService {
     {
         return repo.findByStatusIn(List.of("ON_CHAIN", "HOT_READY","CREATED"));
     }
+
+    public List<Property> getPropByType(String type) {
+
+        if (type == null || type.isBlank()) {
+            throw new IllegalArgumentException("Property type is required");
+        }
+
+        PropertyType propertyType;
+        try {
+            propertyType = PropertyType.valueOf(type.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException(
+                    "Invalid property type: " + type +
+                            ". Allowed values: HOUSE, APARTMENT, VILLA, OFFICE, SHOP, LAND, WAREHOUSE"
+            );
+        }
+
+        return repo.findByType(propertyType);
+    }
+
+    public List<Property> getPropsByTypes(String types) {
+
+        if (types == null || types.isBlank()) {
+            throw new IllegalArgumentException("Property types are required");
+        }
+
+        List<PropertyType> typeList = Arrays.stream(types.split(","))
+                .map(String::trim)
+                .map(String::toUpperCase)   // 👈 converts small/mixed to CAPS
+                .map(PropertyType::valueOf)
+                .toList();
+
+        return repo.findByTypeIn(typeList);
+    }
+
+
+
 
     public Property getProperty(Long id) {
         return repo.findById(id).orElseThrow();
@@ -227,6 +296,10 @@ public Property broadcastSignedIssuance(Long id, String signedTxBlob) throws Exc
         if (req.monthlyRent() != null) {
             p.setMonthlyRent(req.monthlyRent());
         }
+        if (req.annualRoiPercentage() != null) {
+            p.setAnnualRoiPercentage(req.annualRoiPercentage());
+        }
+        
 
         return repo.save(p);
     }

@@ -42,11 +42,15 @@ public class SecurityConfig {
                                 "/login",
                                 "/oauth2/authorization/google",
                                 "/login/oauth2/code/google",
-                                "/investor/webhook"
+                                "/investor/webhook",
+                                "/investor/**",
+                                "/flutter/auth/google"
                         ).permitAll()
+                        .requestMatchers("/ws-chat/**").permitAll()
+                        .requestMatchers("/chat/admin/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/admin/**").hasRole("ADMIN")
-                        .requestMatchers("/investor/**", "/xrpl/**").hasRole("INVESTOR")
+//                        .requestMatchers("/investor/**", "/xrpl/**").hasRole("INVESTOR")
                         .anyRequest().authenticated()
                 )
                 .oauth2Login(oauth2 -> oauth2.successHandler(successHandler))

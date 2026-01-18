@@ -16,6 +16,7 @@ public record UserInvestmentDTO(
     public record PropertyHolding(
             Long propertyId,
             String propertyName,
+            List<String> photoUrls ,
             String tokenSymbol,
             int tokensOwned,
             double tokenPrice,
