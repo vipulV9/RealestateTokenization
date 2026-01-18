@@ -64,8 +64,7 @@ dependencies {
 
 	implementation 'com.twilio.sdk:twilio:10.0.+'
 
-	// === VAULT (Secrets) ===
-	implementation 'org.springframework.vault:spring-vault-core:3.0.4'
+
 
 // ---------- OAuth2 Client (Google) ----------
 	implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
