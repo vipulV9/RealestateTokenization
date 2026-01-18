@@ -1,4 +1,4 @@
-package com.product.RealestateTokenization.config;
+/*package com.product.RealestateTokenization.config;
 
 import io.github.cdimascio.dotenv.Dotenv;
 import org.springframework.context.annotation.Bean;
@@ -37,3 +37,5 @@ public class VaultConfig {
         return new VaultTemplate(endpoint, new TokenAuthentication(token));
     }
 }
+
+ */
