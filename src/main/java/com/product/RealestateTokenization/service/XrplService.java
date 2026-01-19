@@ -130,7 +130,7 @@ public class XrplService {
 
         RestTemplate rest = new RestTemplate();
         Map result = rest.getForObject(
-                "http://localhost:3001/create-wallet",
+                "https://bitsbrickwalletcreate.azurewebsites.net/api/create-wallet",
                 Map.class
         );
 
