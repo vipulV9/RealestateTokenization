@@ -172,16 +172,16 @@ public class PropertyService {
         return p;
     }
 
-
+    @Transactional(readOnly = true)
     public List<Property> getOnChainProperties() {
         return repo.findByStatusIn(List.of("ON_CHAIN", "HOT_READY"));
     }
-
+    @Transactional(readOnly = true)
     public List<Property> getallProperties()
     {
         return repo.findByStatusIn(List.of("ON_CHAIN", "HOT_READY","CREATED"));
     }
-
+    @Transactional(readOnly = true)
     public List<Property> getPropByType(String type) {
 
         if (type == null || type.isBlank()) {
@@ -201,6 +201,7 @@ public class PropertyService {
         return repo.findByType(propertyType);
     }
 
+    @Transactional(readOnly = true)
     public List<Property> getPropsByTypes(String types) {
 
         if (types == null || types.isBlank()) {
