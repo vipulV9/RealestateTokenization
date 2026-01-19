@@ -1,6 +1,7 @@
 package com.product.RealestateTokenization.model;
 
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 
 
@@ -34,6 +35,7 @@ public class Property {
 
 //    @Embedded
 //    private Room room;
+    @JsonIgnore   // ← Add this single annotation
     @ElementCollection
     @CollectionTable(name = "property_rooms", joinColumns = @JoinColumn(name = "property_id"))
     private List<Room> rooms = new ArrayList<>();
