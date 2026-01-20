@@ -1,6 +1,7 @@
 package com.product.RealestateTokenization.service;
 
 import com.azure.security.keyvault.secrets.SecretClient;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.google.common.primitives.UnsignedLong;
 import com.product.RealestateTokenization.util.CryptoUtil;
 import com.google.common.primitives.UnsignedInteger;
@@ -126,24 +127,28 @@ public class XrplService {
 //        return new WalletInfo(address, seed);
 //    }
 
-    public WalletInfo createWallet(String investorId) {
+    public WalletInfo createWallet(String investorId) throws JsonProcessingException {
 
         RestTemplate rest = new RestTemplate();
-        Map result = rest.getForObject(
+
+        String response = rest.getForObject(
                 "https://bitsbrickwalletcreate.azurewebsites.net/api/create-wallet",
-                Map.class
+                String.class
         );
+
+        // 🔍 LOG ONCE (important)
+        System.out.println("XRPL response = " + response);
+
+        // If response is JSON string → parse it
+        ObjectMapper mapper = new ObjectMapper();
+        Map<String, Object> result = mapper.readValue(response, Map.class);
 
         String address = (String) result.get("address");
         String seed = (String) result.get("seed");
 
         // 🔐 Store seed securely
-        secretClient.setSecret(
-                "investor-seed-" + investorId,
-                seed
-        );
+        secretClient.setSecret("investor-seed-" + investorId, seed);
 
-        // ❌ DO NOT return seed
         return new WalletInfo(address, null);
     }
 
