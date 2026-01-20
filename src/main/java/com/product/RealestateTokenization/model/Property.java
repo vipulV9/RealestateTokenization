@@ -35,7 +35,6 @@ public class Property {
 
 //    @Embedded
 //    private Room room;
-    @JsonIgnore
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "property_rooms", joinColumns = @JoinColumn(name = "property_id"))
     private List<Room> rooms = new ArrayList<>();
