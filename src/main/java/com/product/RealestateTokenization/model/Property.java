@@ -57,7 +57,7 @@ public class Property {
 
 
 
-    @ElementCollection
+    @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "property_photos", joinColumns = @JoinColumn(name = "property_id"))
     @Column(name = "photo_url")
     private List<String> photoUrls = new ArrayList<>();
