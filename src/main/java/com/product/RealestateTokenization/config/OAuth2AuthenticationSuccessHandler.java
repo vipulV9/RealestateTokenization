@@ -48,11 +48,12 @@ public class OAuth2AuthenticationSuccessHandler implements AuthenticationSuccess
         String redirectUrl;
 
         if (isAdmin) {
-            // ADMIN → 5173
+            //redirectUrl = "http://localhost:5174/admin?token=" + jwt;
             redirectUrl = "http://localhost:5174/admin?token=" + jwt;
+
         } else {
             // INVESTOR → 5174
-            redirectUrl = "http://localhost:5173/oauth2-redirect?token=" + jwt;
+            redirectUrl = "https://www.bitsbrick.com/oauth2-redirect?token=" + jwt;
         }
 
         response.sendRedirect(redirectUrl);
