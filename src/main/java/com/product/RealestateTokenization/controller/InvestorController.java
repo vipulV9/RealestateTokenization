@@ -6,6 +6,7 @@ import com.product.RealestateTokenization.repository.TransactionRepo;
 import com.product.RealestateTokenization.service.*;
 import com.razorpay.Order;
 import jakarta.mail.MessagingException;
+import org.hibernate.boot.archive.spi.ArchiveEntry;
 import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -48,6 +49,22 @@ public class InvestorController {
         return propertyService.getOnChainProperties();
     }
 
+    @GetMapping("/properties/rent")
+    public List<Property> getallrentedprop()
+    {
+        return propertyService.getallRentedProperty();
+    }
+
+    @GetMapping("/nearby/rent")
+    public List<Property> getnearby(
+            @RequestParam double lat,
+            @RequestParam double lng
+    )
+    {
+        return propertyService.getNormalPropertiesNearby(lat,lng);
+    }
+
+
     @GetMapping("/properties/{id}")
     public Property getProperty(@PathVariable Long id) {
         return propertyService.getProperty(id);
@@ -56,7 +73,8 @@ public class InvestorController {
     @GetMapping("/properties/by-type")
     public ResponseEntity<List<Property>> getPropertiesByType(
             @RequestParam String type
-    ) {
+    )
+    {
         return ResponseEntity.ok(propertyService.getPropByType(type));
     }
 

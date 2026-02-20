@@ -39,11 +39,11 @@ dependencies {
 	testImplementation 'org.springframework.security:spring-security-test'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 
-	implementation 'mysql:mysql-connector-java:8.0.33'
-
+	runtimeOnly 'com.mysql:mysql-connector-j'
 	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 
-	implementation 'com.sun.mail:jakarta.mail:2.0.1'   // IMPORTANT for Boot 3.x
+	implementation 'com.sun.mail:jakarta.mail:2.0.1'
+	// IMPORTANT for Boot 3.x
 
 	// === RAZORPAY ===
 	implementation 'com.razorpay:razorpay-java:1.3.7'
@@ -63,7 +63,7 @@ dependencies {
 	implementation 'io.github.cdimascio:java-dotenv:5.2.2'
 
 	implementation 'com.twilio.sdk:twilio:10.0.+'
-
+	implementation 'org.jboss.logging:jboss-logging:3.5.3.Final'
 
 
 // ---------- OAuth2 Client (Google) ----------

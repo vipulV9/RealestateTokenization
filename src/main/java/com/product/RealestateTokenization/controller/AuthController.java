@@ -40,6 +40,38 @@ public class AuthController {
         return ResponseEntity.ok(user);
     }
 
+    @PostMapping("/add-phone")
+    public ResponseEntity<?> updatePhone(
+            @RequestBody Map<String, String> payload
+    ) {
+
+        Long userId = getCurrentUserId();  // extracted from JWT securely
+        User user = userRepo.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        String phone = payload.get("phone");
+
+        if (phone == null || phone.length() != 13 || !phone.startsWith("+91")) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "Invalid phone format"));
+        }
+
+        if (user.isPhoneVerified()) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "Phone already verified"));
+        }
+
+        user.setPhone(phone);
+        user.setPhoneVerified(true);
+
+        userRepo.save(user);
+
+        return ResponseEntity.ok(Map.of(
+                "message", "Phone updated successfully",
+                "phone", user.getPhone()
+        ));
+    }
+
     @PostMapping("/login")
     public ResponseEntity<String> login(@RequestBody LoginRequest req) {
         String token = userService.login(req.email(), req.password());

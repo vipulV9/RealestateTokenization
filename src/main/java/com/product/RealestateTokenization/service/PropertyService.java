@@ -80,7 +80,8 @@ public class PropertyService {
 //}
 
     @Transactional
-    public Property createPropertyWithUnsignedTx(PropertyCreateReq req, List<MultipartFile> images) throws Exception {
+    public Property createPropertyWithUnsignedTx(PropertyCreateReq req, List<MultipartFile> images,    List<MultipartFile> videos
+    ) throws Exception {
         Property p = new Property();
         p.setName(req.name());
         p.setAbout(req.about());
@@ -95,6 +96,9 @@ public class PropertyService {
         p.setTokenPrice(req.tokenPrice());
         p.setMonthlyRent(req.monthlyRent());
         p.setAnnualRoiPercentage(req.annualRoiPercentage());
+        p.setSecurity(req.security());
+        p.setState(req.state());
+
 
         p.setStatus("CREATED");
 
@@ -158,6 +162,19 @@ public class PropertyService {
         }
         p.setPhotoUrls(uploadedUrls);
 
+        List<String> uploadedVideoUrls = new ArrayList<>();
+        if (videos != null && !videos.isEmpty()) {
+            for (MultipartFile video : videos) {
+                Map uploadResult = cloudinary.uploader().upload(
+                        video.getBytes(),
+                        ObjectUtils.asMap("resource_type", "video")
+                );
+                uploadedVideoUrls.add((String) uploadResult.get("url"));
+            }
+        }
+        p.setVideoUrls(uploadedVideoUrls);
+
+
         // Generate unsigned issuance
         String unsignedJson = xrplService.generateUnsignedIssuance(p.getTokenSymbol(), req.totalTokens());
         p.setUnsignedTxBlob(unsignedJson);
@@ -180,6 +197,15 @@ public class PropertyService {
     public List<Property> getallProperties()
     {
         return repo.findByStatusIn(List.of("ON_CHAIN", "HOT_READY","CREATED"));
+    }
+
+    public List<Property> getallRentedProperty()
+    {
+        return repo.findByState(PropertyState.NORMAL);
+    }
+
+    public List<Property> getNormalPropertiesNearby(double lat, double lng) {
+        return repo.findNormalPropertiesWithin6Km(lat, lng);
     }
 
     public List<Property> getPropByType(String type) {

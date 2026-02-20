@@ -1,11 +1,9 @@
 package com.product.RealestateTokenization.model;
 
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 
 
-import jakarta.persistence.*;
 import lombok.Data;
 
 import java.util.ArrayList;
@@ -20,6 +18,7 @@ public class Property {
     private String name,about, tokenSymbol, status = "CREATED", spvId;
     private double propertyValue, tokenPrice;
     private double currentValue;
+    private double security;
     private int totalTokens, availableTokens;
     @Column(columnDefinition = "TEXT")
     private String unsignedTxBlob;
@@ -32,6 +31,12 @@ public class Property {
 
     @Enumerated(EnumType.STRING)
     private PropertyType type;
+
+    @Enumerated(EnumType.STRING)
+    private PropertyState state;
+
+    @Enumerated(EnumType.STRING)
+    private Furnished furnished;
 
 //    @Embedded
 //    private Room room;
@@ -61,6 +66,12 @@ public class Property {
     @CollectionTable(name = "property_photos", joinColumns = @JoinColumn(name = "property_id"))
     @Column(name = "photo_url")
     private List<String> photoUrls = new ArrayList<>();
+
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "property_videos", joinColumns = @JoinColumn(name = "property_id"))
+    @Column(name = "video_url")
+    private List<String> videoUrls = new ArrayList<>();
+
 
     public void setTokenPrice(double price) { this.tokenPrice = price; }
     public double getTokenPrice() { return tokenPrice; }

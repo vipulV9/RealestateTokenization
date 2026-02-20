@@ -52,13 +52,15 @@ public List<Property> listProperties() {
 )
 public ResponseEntity<PropertyResponse> createProperty(
         @RequestPart("property") String propertyJson,
-        @RequestPart(value = "images", required = false) List<MultipartFile> images
+        @RequestPart(value = "images", required = false) List<MultipartFile> images,
+        @RequestPart(required = false) List<MultipartFile> videos
+
 ) throws Exception {
 
     ObjectMapper mapper = new ObjectMapper();
     PropertyCreateReq req = mapper.readValue(propertyJson, PropertyCreateReq.class);
 
-    Property property = propertyService.createPropertyWithUnsignedTx(req, images);
+    Property property = propertyService.createPropertyWithUnsignedTx(req, images,videos);
     return ResponseEntity.ok(new PropertyResponse(property.getId()));
 }
 

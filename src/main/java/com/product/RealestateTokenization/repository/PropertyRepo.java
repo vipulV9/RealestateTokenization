@@ -2,6 +2,7 @@ package com.product.RealestateTokenization.repository;
 
 
 import com.product.RealestateTokenization.model.Property;
+import com.product.RealestateTokenization.model.PropertyState;
 import com.product.RealestateTokenization.model.PropertyType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -14,11 +15,27 @@ public interface PropertyRepo extends JpaRepository<Property, Long> {
     List<Property> findByStatusIn(List<String> statuses);
 
     List<Property> findByType(PropertyType type);
-
+    List<Property> findByState(PropertyState state);
     List<Property> findByTypeIn(List<PropertyType> types);
 
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT p FROM Property p WHERE p.id = :id")
     Optional<Property> findByIdForUpdate(Long id);
+
+    @Query(value = """
+SELECT * FROM property p
+WHERE p.state = 'NORMAL'
+AND (
+    6371 * acos(
+        cos(radians(:lat)) *
+        cos(radians(p.lat)) *
+        cos(radians(p.lng) - radians(:lng)) +
+        sin(radians(:lat)) *
+        sin(radians(p.lat))
+    )
+) <= 6
+""", nativeQuery = true)
+    List<Property> findNormalPropertiesWithin6Km(double lat, double lng);
+
 }

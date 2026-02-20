@@ -1,5 +1,7 @@
 package com.product.RealestateTokenization.model;
 
+import com.microsoft.aad.msal4j.PublicClientApplication;
+
 public enum PropertyType {
     HOUSE,
     APARTMENT,
@@ -9,3 +11,4 @@ public enum PropertyType {
     LAND,
     RENTED
 }
+

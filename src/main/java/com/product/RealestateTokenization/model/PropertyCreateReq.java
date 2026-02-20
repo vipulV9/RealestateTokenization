@@ -9,6 +9,7 @@ public record PropertyCreateReq
          double value,
          String about,
          double currentValue,
+         double security,
          int totalTokens,
          int availableTokens,
          double tokenPrice,
@@ -16,9 +17,10 @@ public record PropertyCreateReq
          Double annualRoiPercentage,
          double monthlyRent,
          PropertyType type,
+         Furnished furnishl,
+         PropertyState state,
          List<RoomReq> rooms,
          SpvCompanyReq spvCompany
-
         )
         {
                 public static record RoomReq(
