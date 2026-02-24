@@ -5,6 +5,7 @@ import jakarta.persistence.*;
 
 
 import lombok.Data;
+import net.minidev.json.annotate.JsonIgnore;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -19,12 +20,18 @@ public class Property {
     private double propertyValue, tokenPrice;
     private double currentValue;
     private double security;
+    private double Size;
     private int totalTokens, availableTokens;
     @Column(columnDefinition = "TEXT")
     private String unsignedTxBlob;
     @Embedded
     private Coordinates coordinates;
     private double monthlyRent = 0.0;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "owner_id", nullable = false)
+    private User owner;
+
     @ManyToOne
     @JoinColumn(name = "spv_company_id")
     private SpvCompany spvCompany;
@@ -34,6 +41,8 @@ public class Property {
 
     @Enumerated(EnumType.STRING)
     private PropertyState state;
+
+    private boolean islive;
 
     @Enumerated(EnumType.STRING)
     private Furnished furnished;
@@ -75,4 +84,11 @@ public class Property {
 
     public void setTokenPrice(double price) { this.tokenPrice = price; }
     public double getTokenPrice() { return tokenPrice; }
+    @Embeddable
+    @Data
+    public static class OwnerDetails {
+        private String name;
+        private String phone;
+        private String email;
+    }
 }

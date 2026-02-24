@@ -15,10 +15,11 @@ public interface PropertyRepo extends JpaRepository<Property, Long> {
     List<Property> findByStatusIn(List<String> statuses);
 
     List<Property> findByType(PropertyType type);
-    List<Property> findByState(PropertyState state);
+    List<Property> findByStateAndIsliveTrue(PropertyState state);
     List<Property> findByTypeIn(List<PropertyType> types);
 
-
+    List<Property> findByOwnerId(Long ownerId);
+    Optional<Property> findByIdAndOwnerId(Long id, Long ownerId);
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT p FROM Property p WHERE p.id = :id")
     Optional<Property> findByIdForUpdate(Long id);
@@ -26,6 +27,7 @@ public interface PropertyRepo extends JpaRepository<Property, Long> {
     @Query(value = """
 SELECT * FROM property p
 WHERE p.state = 'NORMAL'
+AND p.islive = true
 AND (
     6371 * acos(
         cos(radians(:lat)) *

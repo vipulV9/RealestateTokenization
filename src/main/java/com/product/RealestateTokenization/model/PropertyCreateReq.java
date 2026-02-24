@@ -1,5 +1,7 @@
 package com.product.RealestateTokenization.model;
 
+import org.springframework.beans.PropertyValue;
+
 import java.util.List;
 
 public record PropertyCreateReq
@@ -8,17 +10,23 @@ public record PropertyCreateReq
          double lng,
          double value,
          String about,
+         double propertyValue,
          double currentValue,
          double security,
+         double Size,
          int totalTokens,
          int availableTokens,
          double tokenPrice,
          String tokenSymbol,
          Double annualRoiPercentage,
          double monthlyRent,
+         String ownername,
+         double ownerphno,
          PropertyType type,
-         Furnished furnishl,
+         Furnished furnished,
          PropertyState state,
+         boolean islive,
+         String locationTitle,
          List<RoomReq> rooms,
          SpvCompanyReq spvCompany
         )

@@ -5,6 +5,7 @@ import com.cloudinary.utils.ObjectUtils;
 import com.product.RealestateTokenization.model.*;
 import com.product.RealestateTokenization.repository.PropertyRepo;
 import com.product.RealestateTokenization.repository.SpvCompanyRepo;
+import com.product.RealestateTokenization.repository.UserRepo;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,15 +22,17 @@ public class PropertyService {
     private final PropertyRepo repo;
     private final XrplService xrplService;
     private final SpvCompanyRepo spvCompanyRepo;
+    private final UserRepo userRepo;
 
 
     @Autowired
     private Cloudinary cloudinary;
 
-    public PropertyService(PropertyRepo repo, XrplService xrplService, SpvCompanyRepo spvCompanyRepo) {
+    public PropertyService(PropertyRepo repo, XrplService xrplService, SpvCompanyRepo spvCompanyRepo, UserRepo userRepo) {
         this.repo = repo;
         this.xrplService = xrplService;
         this.spvCompanyRepo = spvCompanyRepo;
+        this.userRepo = userRepo;
     }
 
 //    @Transactional
@@ -97,8 +100,10 @@ public class PropertyService {
         p.setMonthlyRent(req.monthlyRent());
         p.setAnnualRoiPercentage(req.annualRoiPercentage());
         p.setSecurity(req.security());
+        p.setSize(req.Size());
+        p.setLocationTitle(req.locationTitle());
         p.setState(req.state());
-
+        p.setIslive(false);
 
         p.setStatus("CREATED");
 
@@ -188,7 +193,9 @@ public class PropertyService {
 
         return p;
     }
-
+    public List<Property> getPropertiesByOwnerId(Long ownerId) {
+        return repo.findByOwnerId(ownerId);
+    }
 
     public List<Property> getOnChainProperties() {
         return repo.findByStatusIn(List.of("ON_CHAIN", "HOT_READY"));
@@ -201,9 +208,8 @@ public class PropertyService {
 
     public List<Property> getallRentedProperty()
     {
-        return repo.findByState(PropertyState.NORMAL);
+        return repo.findByStateAndIsliveTrue(PropertyState.NORMAL);
     }
-
     public List<Property> getNormalPropertiesNearby(double lat, double lng) {
         return repo.findNormalPropertiesWithin6Km(lat, lng);
     }
@@ -328,6 +334,113 @@ public Property broadcastSignedIssuance(Long id, String signedTxBlob) throws Exc
         
 
         return repo.save(p);
+    }
+
+
+    @Transactional
+    public Property createNormalProperty(
+            NormalPropertyCreateReq req,
+            List<MultipartFile> images,
+            List<MultipartFile> videos,
+            Long ownerId
+    ) throws Exception {
+
+        // 🔹 Fetch Owner
+        User owner = userRepo.findById(ownerId)
+                .orElseThrow(() -> new RuntimeException("Owner not found"));
+
+        Property p = new Property();
+
+        // 🔹 Basic Info
+        p.setName(req.name());
+        p.setAbout(req.about());
+
+        // 🔹 Coordinates
+        Property.Coordinates coords = new Property.Coordinates();
+        coords.setLat(req.lat());
+        coords.setLng(req.lng());
+        p.setCoordinates(coords);
+
+        // 🔹 Rental Info
+        p.setMonthlyRent(req.monthlyRent());
+        p.setSecurity(req.security());
+        p.setSize(req.size());
+        p.setLocationTitle(req.locationTitle());
+
+        // 🔹 Type & State
+        p.setType(req.type());
+        p.setFurnished(req.furnished());
+        p.setState(PropertyState.NORMAL);   // Force NORMAL
+        p.setIslive(false);                 // Admin must approve
+        p.setStatus("CREATED");
+
+        // 🔹 Link Owner (Platform User)
+        p.setOwner(owner);
+
+        // 🔹 Add Rooms (if provided)
+        if (req.rooms() != null && !req.rooms().isEmpty()) {
+
+            List<Property.Room> roomList = new ArrayList<>();
+
+            for (NormalPropertyCreateReq.RoomReq r : req.rooms()) {
+                Property.Room room = new Property.Room();
+                room.setType(r.type());
+                room.setValue(r.value());
+                roomList.add(room);
+            }
+
+            p.setRooms(roomList);
+        }
+
+        // ---------------------------
+        // 🔹 Cloudinary Image Upload
+        // ---------------------------
+        List<String> uploadedImageUrls = new ArrayList<>();
+
+        if (images != null && !images.isEmpty()) {
+            for (MultipartFile image : images) {
+
+                Map uploadResult = cloudinary.uploader()
+                        .upload(image.getBytes(), ObjectUtils.emptyMap());
+
+                uploadedImageUrls.add((String) uploadResult.get("url"));
+            }
+        }
+
+        p.setPhotoUrls(uploadedImageUrls);
+
+        // ---------------------------
+        // 🔹 Cloudinary Video Upload
+        // ---------------------------
+        List<String> uploadedVideoUrls = new ArrayList<>();
+
+        if (videos != null && !videos.isEmpty()) {
+            for (MultipartFile video : videos) {
+
+                Map uploadResult = cloudinary.uploader().upload(
+                        video.getBytes(),
+                        ObjectUtils.asMap("resource_type", "video")
+                );
+
+                uploadedVideoUrls.add((String) uploadResult.get("url"));
+            }
+        }
+
+        p.setVideoUrls(uploadedVideoUrls);
+
+        // 🔹 Save Property
+        return repo.save(p);
+    }
+
+    @Transactional
+    public Property toggleLiveStatus(Long propertyId, Long ownerId) {
+
+        Property property = repo.findByIdAndOwnerId(propertyId, ownerId)
+                .orElseThrow(() -> new RuntimeException("Property not found or not yours"));
+
+        property.setIslive(!property.isIslive());  // toggle
+
+        return repo.save(property);
     }
 
 

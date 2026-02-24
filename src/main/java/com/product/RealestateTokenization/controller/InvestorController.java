@@ -1,6 +1,7 @@
 package com.product.RealestateTokenization.controller;
 
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.product.RealestateTokenization.model.*;
 import com.product.RealestateTokenization.repository.TransactionRepo;
 import com.product.RealestateTokenization.service.*;
@@ -10,13 +11,14 @@ import org.hibernate.boot.archive.spi.ArchiveEntry;
 import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
-
+import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -49,6 +51,41 @@ public class InvestorController {
         return propertyService.getOnChainProperties();
     }
 
+
+
+    @GetMapping("/owner/my-properties")
+    public ResponseEntity<List<Property>> getMyProperties() {
+
+        Long ownerId = getCurrentUserId();
+
+        List<Property> properties =
+                propertyService.getPropertiesByOwnerId(ownerId);
+
+        return ResponseEntity.ok(properties);
+    }
+
+
+
+    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<PropertyResponse> createProperty(
+            @RequestPart("property") String propertyJson,
+            @RequestPart(value = "images", required = false) List<MultipartFile> images,
+            @RequestPart(value = "videos", required = false) List<MultipartFile> videos
+    ) throws Exception {
+
+        ObjectMapper mapper = new ObjectMapper();
+
+        NormalPropertyCreateReq req =
+                mapper.readValue(propertyJson, NormalPropertyCreateReq.class);
+
+        Long ownerId = getCurrentUserId();
+
+        Property property = propertyService
+                .createNormalProperty(req, images, videos, ownerId);
+
+        return ResponseEntity.ok(new PropertyResponse(property.getId()));
+    }
+
     @GetMapping("/properties/rent")
     public List<Property> getallrentedprop()
     {
@@ -64,6 +101,23 @@ public class InvestorController {
         return propertyService.getNormalPropertiesNearby(lat,lng);
     }
 
+    @PutMapping("/owner/properties/{id}/live")
+    public ResponseEntity<?> toggleLive(
+            @PathVariable Long id
+    ) {
+
+        Long ownerId = getCurrentUserId();
+
+        Property updated = propertyService.toggleLiveStatus(id, ownerId);
+
+        return ResponseEntity.ok(
+                Map.of(
+                        "propertyId", updated.getId(),
+                        "islive", updated.isIslive(),
+                        "message", "Live status updated"
+                )
+        );
+    }
 
     @GetMapping("/properties/{id}")
     public Property getProperty(@PathVariable Long id) {
