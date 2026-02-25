@@ -73,7 +73,19 @@ public ResponseEntity<PropertyResponse> createProperty(
     }
 
 
+    @GetMapping("/getUnpProp")
+    public List<Property> getunpprop() {
+        return adminService.getallnotapprovedprop();
+    }
 
+    @PatchMapping("/properties/{id}/approval")
+    public ResponseEntity<Property> changeApprovalStatus(
+            @PathVariable Long id,
+            @RequestParam Boolean approved
+    ) {
+        Property updated = adminService.updateisapproved(id, approved);
+        return ResponseEntity.ok(updated);
+    }
 
 
 
@@ -93,6 +105,7 @@ public ResponseEntity<PropertyResponse> createProperty(
                 .contentLength(jsonBytes.length)
                 .body(resource);
     }
+
 
 //    @PostMapping("/properties/{id}/upload-signed")
 //    public ResponseEntity<Property> uploadSigned(@PathVariable Long id, @RequestBody SignedTxUploadReq req) throws Exception {

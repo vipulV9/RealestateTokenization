@@ -166,7 +166,21 @@ public class AdminActionService {
         return tx;
     }
 
+    public List<Property> getallnotapprovedprop()
+    {
+        return propertyRepo.findByIsApproved(false);
+    }
 
+    public Property updateisapproved(Long propertyId, Boolean approved)
+    {
+
+        Property property = propertyRepo.findById(propertyId)
+                .orElseThrow(() -> new RuntimeException("Property not found"));
+
+        property.setIsApproved(approved);
+
+        return propertyRepo.save(property);
+    }
 
 
     public Transaction reject(Long id) {

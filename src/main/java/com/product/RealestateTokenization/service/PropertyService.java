@@ -208,11 +208,13 @@ public class PropertyService {
 
     public List<Property> getallRentedProperty()
     {
-        return repo.findByStateAndIsliveTrue(PropertyState.NORMAL);
+        return repo.findByStateAndIsliveTrueAndIsApprovedTrue(PropertyState.NORMAL);
     }
     public List<Property> getNormalPropertiesNearby(double lat, double lng) {
         return repo.findNormalPropertiesWithin6Km(lat, lng);
     }
+
+
 
     public List<Property> getPropByType(String type) {
 

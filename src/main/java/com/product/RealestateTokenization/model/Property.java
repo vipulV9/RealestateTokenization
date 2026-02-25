@@ -27,6 +27,8 @@ public class Property {
     private Coordinates coordinates;
     private double monthlyRent = 0.0;
 
+    private Boolean isApproved = false;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "owner_id", nullable = false)
     @JsonIgnore
