@@ -1,7 +1,7 @@
 package com.product.RealestateTokenization.model;
 
 public enum Furnished {
-    FURNISHED,
-    SEMIFURNISHED,
+    FULLY_FURNISHED,
+    SEMI_FURNISHED,
     UNFURNISHED
 }
