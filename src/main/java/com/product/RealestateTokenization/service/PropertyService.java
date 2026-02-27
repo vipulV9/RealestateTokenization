@@ -3,6 +3,7 @@ package com.product.RealestateTokenization.service;
 import com.cloudinary.Cloudinary;
 import com.cloudinary.utils.ObjectUtils;
 import com.product.RealestateTokenization.model.*;
+import com.product.RealestateTokenization.repository.EnquiryRepo;
 import com.product.RealestateTokenization.repository.PropertyRepo;
 import com.product.RealestateTokenization.repository.SpvCompanyRepo;
 import com.product.RealestateTokenization.repository.UserRepo;
@@ -23,16 +24,17 @@ public class PropertyService {
     private final XrplService xrplService;
     private final SpvCompanyRepo spvCompanyRepo;
     private final UserRepo userRepo;
-
+    private final EnquiryRepo enquiryRepo;
 
     @Autowired
     private Cloudinary cloudinary;
 
-    public PropertyService(PropertyRepo repo, XrplService xrplService, SpvCompanyRepo spvCompanyRepo, UserRepo userRepo) {
+    public PropertyService(PropertyRepo repo, XrplService xrplService, SpvCompanyRepo spvCompanyRepo, UserRepo userRepo, EnquiryRepo enquiryRepo) {
         this.repo = repo;
         this.xrplService = xrplService;
         this.spvCompanyRepo = spvCompanyRepo;
         this.userRepo = userRepo;
+        this.enquiryRepo = enquiryRepo;
     }
 
 //    @Transactional
@@ -337,7 +339,21 @@ public Property broadcastSignedIssuance(Long id, String signedTxBlob) throws Exc
 
         return repo.save(p);
     }
+    @Transactional
+    public Enquiry createEnquiry(Long userId, Long propertyId) {
 
+        User user = userRepo.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        Property property = repo.findById(propertyId)
+                .orElseThrow(() -> new RuntimeException("Property not found"));
+
+        Enquiry enquiry = new Enquiry();
+        enquiry.setUser(user);
+        enquiry.setProperty(property);
+
+        return enquiryRepo.save(enquiry);
+    }
 
     @Transactional
     public Property createNormalProperty(

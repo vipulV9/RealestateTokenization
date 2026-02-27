@@ -23,9 +23,10 @@ public class AdminActionService {
     private final XrplService xrplService;
     private final UserRepo userRepo;
     private final WalletService walletService;
+    private final EnquiryRepo enquiryRepo;
 
     public AdminActionService(KeyVaultService keyVaultService, TransactionRepo txRepo, WalletRepo walletRepo, PropertyRepo propertyRepo,
-                              TokenOwnershipRepo ownershipRepo, XrplService xrplService, UserRepo userRepo, WalletService walletService) {
+                              TokenOwnershipRepo ownershipRepo, XrplService xrplService, UserRepo userRepo, WalletService walletService, EnquiryRepo enquiryRepo) {
         this.keyVaultService = keyVaultService;
         this.txRepo = txRepo;
         this.walletRepo = walletRepo;
@@ -34,6 +35,7 @@ public class AdminActionService {
         this.xrplService = xrplService;
         this.userRepo = userRepo;
         this.walletService = walletService;
+        this.enquiryRepo = enquiryRepo;
     }
 
     @Value("${xrpl.cold-wallet-address}")
@@ -204,6 +206,10 @@ public class AdminActionService {
         return txRepo.findAll();
     }
 
+
+    public List<Enquiry> getAllEnquiries() {
+        return enquiryRepo.findAll();
+    }
 
 
 }

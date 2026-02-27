@@ -263,7 +263,13 @@ public Wallet getWallet() {
 
         return ResponseEntity.ok(portfolio);
     }
+    @PostMapping("/properties/{id}/enquire")
+    public Enquiry enquire(@PathVariable Long id) {
 
+        Long userId = getCurrentUserId();
+
+        return propertyService.createEnquiry(userId, id);
+    }
     // Optional: Transaction history
     @GetMapping("/transactions")
     public List<Transaction> getMyTransactions() {

@@ -72,6 +72,10 @@ public ResponseEntity<PropertyResponse> createProperty(
         return ResponseEntity.ok(propertyService.updateProperty(id, req));
     }
 
+    @GetMapping("/enquiries")
+    public List<Enquiry> getAllEnquiries() {
+        return adminService.getAllEnquiries();
+    }
 
     @GetMapping("/getUnpProp")
     public List<Property> getunpprop() {
