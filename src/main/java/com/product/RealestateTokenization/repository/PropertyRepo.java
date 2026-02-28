@@ -28,6 +28,7 @@ public interface PropertyRepo extends JpaRepository<Property, Long> {
 SELECT * FROM property p
 WHERE p.state = 'NORMAL'
 AND p.islive = true
+AND p.is_approved = true
 AND (
     6371 * acos(
         cos(radians(:lat)) *
