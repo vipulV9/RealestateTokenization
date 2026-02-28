@@ -13,8 +13,7 @@ import java.util.Optional;
 
 public interface PropertyRepo extends JpaRepository<Property, Long> {
     List<Property> findByStatusIn(List<String> statuses);
-
-    List<Property> findByType(PropertyType type);
+    List<Property> findByTypeAndIsApprovedTrueAndIsliveTrue(PropertyType type);
     List<Property> findByStateAndIsliveTrueAndIsApprovedTrue(PropertyState state);
     List<Property> findByTypeIn(List<PropertyType> types);
     List<Property> findByIsApproved(Boolean isApproved);

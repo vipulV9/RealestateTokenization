@@ -234,7 +234,7 @@ public class PropertyService {
             );
         }
 
-        return repo.findByType(propertyType);
+        return repo.findByTypeAndIsApprovedTrueAndIsliveTrue(propertyType);
     }
 
     public List<Property> getPropsByTypes(String types) {
