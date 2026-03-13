@@ -49,6 +49,14 @@ public class Property {
     @Enumerated(EnumType.STRING)
     private Furnished furnished;
 
+    @ManyToMany(fetch = FetchType.EAGER)
+    @JoinTable(
+            name = "property_services",
+            joinColumns = @JoinColumn(name = "property_id"),
+            inverseJoinColumns = @JoinColumn(name = "service_id")
+    )
+    private List<ServiceProvider> services = new ArrayList<>();
+
 //    @Embedded
 //    private Room room;
     @ElementCollection(fetch = FetchType.EAGER)

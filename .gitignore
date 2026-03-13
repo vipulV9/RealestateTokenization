@@ -5,6 +5,10 @@ build/
 !**/src/main/**/build/
 !**/src/test/**/build/
 
+
+# Firebase secret
+src/main/resources/firebase/serviceAccountKey.json
+
 ### STS ###
 application-prod.properties
 .apt_generated

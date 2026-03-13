@@ -15,7 +15,8 @@ public record NormalPropertyCreateReq(
         PropertyType type,
         Furnished furnished,
         PropertyState state,
-        List<RoomReq> rooms
+        List<RoomReq> rooms,
+        List<String> services
 ) {
 
     public static record RoomReq(

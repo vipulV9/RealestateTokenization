@@ -15,7 +15,7 @@ public interface PropertyRepo extends JpaRepository<Property, Long> {
     List<Property> findByStatusIn(List<String> statuses);
     List<Property> findByTypeAndIsApprovedTrueAndIsliveTrue(PropertyType type);
     List<Property> findByStateAndIsliveTrueAndIsApprovedTrue(PropertyState state);
-    List<Property> findByTypeIn(List<PropertyType> types);
+    List<Property> findByTypeInAndIsApprovedTrueAndIsliveTrue(List<PropertyType> types);
     List<Property> findByIsApproved(Boolean isApproved);
     List<Property> findByOwnerId(Long ownerId);
     Optional<Property> findByIdAndOwnerId(Long id, Long ownerId);

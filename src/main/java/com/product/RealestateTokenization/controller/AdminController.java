@@ -30,10 +30,12 @@ public class AdminController {
     private final PropertyService propertyService;
     private final AdminActionService adminService;
     private  RentService rentService;
+    private  NotificationService notificationService;
 
-    public AdminController(PropertyService propertyService, AdminActionService adminService) {
+    public AdminController(PropertyService propertyService, AdminActionService adminService,NotificationService notificationService) {
         this.propertyService = propertyService;
         this.adminService = adminService;
+        this.notificationService = notificationService;
     }
 
 //    @PostMapping("/properties")
@@ -45,6 +47,36 @@ public class AdminController {
 public List<Property> listProperties() {
     return propertyService.getallProperties();
 }
+
+
+
+
+    @PostMapping("/broadcast")
+    public String sendNotification(
+            @RequestParam String title,
+            @RequestParam String body
+    ) throws Exception {
+
+        notificationService.sendToAllUsers(title, body);
+
+        return "Notification sent to all users";
+    }
+
+
+    @PostMapping("/sendimgnotif")
+    public ResponseEntity<String> sendimagenotif(
+            @RequestParam String title,
+            @RequestParam String body,
+            @RequestParam String imageurl
+    ) {
+        try {
+            notificationService.sendImageNotification(title,body,imageurl);
+            return ResponseEntity.ok("notification send successfully");
+        }
+        catch (Exception e) {
+            return ResponseEntity.status(500).body("fail to send notification");
+        }
+    }
 
 @PostMapping(
         value = "/properties",

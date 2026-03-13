@@ -3,10 +3,7 @@ package com.product.RealestateTokenization.service;
 import com.cloudinary.Cloudinary;
 import com.cloudinary.utils.ObjectUtils;
 import com.product.RealestateTokenization.model.*;
-import com.product.RealestateTokenization.repository.EnquiryRepo;
-import com.product.RealestateTokenization.repository.PropertyRepo;
-import com.product.RealestateTokenization.repository.SpvCompanyRepo;
-import com.product.RealestateTokenization.repository.UserRepo;
+import com.product.RealestateTokenization.repository.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,16 +22,18 @@ public class PropertyService {
     private final SpvCompanyRepo spvCompanyRepo;
     private final UserRepo userRepo;
     private final EnquiryRepo enquiryRepo;
+    private final ServiceProviderRepo serviceProviderRepo;
 
     @Autowired
     private Cloudinary cloudinary;
 
-    public PropertyService(PropertyRepo repo, XrplService xrplService, SpvCompanyRepo spvCompanyRepo, UserRepo userRepo, EnquiryRepo enquiryRepo) {
+    public PropertyService(PropertyRepo repo, XrplService xrplService, SpvCompanyRepo spvCompanyRepo, UserRepo userRepo, EnquiryRepo enquiryRepo, ServiceProviderRepo serviceProviderRepo) {
         this.repo = repo;
         this.xrplService = xrplService;
         this.spvCompanyRepo = spvCompanyRepo;
         this.userRepo = userRepo;
         this.enquiryRepo = enquiryRepo;
+        this.serviceProviderRepo = serviceProviderRepo;
     }
 
 //    @Transactional
@@ -243,13 +242,14 @@ public class PropertyService {
             throw new IllegalArgumentException("Property types are required");
         }
 
+
         List<PropertyType> typeList = Arrays.stream(types.split(","))
                 .map(String::trim)
-                .map(String::toUpperCase)   // 👈 converts small/mixed to CAPS
+                .map(String::toUpperCase)
                 .map(PropertyType::valueOf)
                 .toList();
 
-        return repo.findByTypeIn(typeList);
+        return repo.findByTypeInAndIsApprovedTrueAndIsliveTrue(typeList);
     }
 
 
@@ -410,9 +410,26 @@ public Property broadcastSignedIssuance(Long id, String signedTxBlob) throws Exc
             p.setRooms(roomList);
         }
 
-        // ---------------------------
-        // 🔹 Cloudinary Image Upload
-        // ---------------------------
+
+        if (req.services() != null && !req.services().isEmpty()) {
+
+            List<ServiceProvider> providers = new ArrayList<>();
+
+            for (String serviceName : req.services()) {
+
+                ServiceProvider provider = serviceProviderRepo
+                        .findByName(serviceName)
+                        .orElseThrow(() ->
+                                new RuntimeException("Service not found: " + serviceName));
+
+                providers.add(provider);
+            }
+
+            p.setServices(providers);
+        }
+
+
+
         List<String> uploadedImageUrls = new ArrayList<>();
 
         if (images != null && !images.isEmpty()) {
@@ -460,7 +477,5 @@ public Property broadcastSignedIssuance(Long id, String signedTxBlob) throws Exc
 
         return repo.save(property);
     }
-
-
 
 }
