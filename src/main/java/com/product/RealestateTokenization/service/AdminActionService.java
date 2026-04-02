@@ -1,8 +1,12 @@
 package com.product.RealestateTokenization.service;
 
 import com.azure.security.keyvault.secrets.SecretClient;
+import com.product.RealestateTokenization.Elasticsearch.PropertyMapper;
+import com.product.RealestateTokenization.Elasticsearch.PropertySearch;
+import com.product.RealestateTokenization.Elasticsearch.PropertySearchRepository;
 import com.product.RealestateTokenization.model.*;
 import com.product.RealestateTokenization.repository.*;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -10,6 +14,8 @@ import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
 import java.util.Map;
+
+
 
 @Service
 @Transactional
@@ -24,6 +30,9 @@ public class AdminActionService {
     private final UserRepo userRepo;
     private final WalletService walletService;
     private final EnquiryRepo enquiryRepo;
+
+    @Autowired
+    private PropertySearchRepository searchRepository;
 
     public AdminActionService(KeyVaultService keyVaultService, TransactionRepo txRepo, WalletRepo walletRepo, PropertyRepo propertyRepo,
                               TokenOwnershipRepo ownershipRepo, XrplService xrplService, UserRepo userRepo, WalletService walletService, EnquiryRepo enquiryRepo) {
@@ -173,15 +182,20 @@ public class AdminActionService {
         return propertyRepo.findByIsApproved(false);
     }
 
-    public Property updateisapproved(Long propertyId, Boolean approved)
-    {
+    @Transactional
+    public Property updateisapproved(Long propertyId, Boolean approved) {
 
         Property property = propertyRepo.findById(propertyId)
                 .orElseThrow(() -> new RuntimeException("Property not found"));
 
         property.setIsApproved(approved);
 
-        return propertyRepo.save(property);
+        Property saved = propertyRepo.save(property);
+
+        PropertySearch searchDoc = PropertyMapper.toSearch(saved);
+        searchRepository.save(searchDoc);
+
+        return saved;
     }
 
 

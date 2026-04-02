@@ -2,6 +2,8 @@ package com.product.RealestateTokenization.controller;
 
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.product.RealestateTokenization.Elasticsearch.PropertySearch;
+import com.product.RealestateTokenization.Elasticsearch.PropertySearchRepository;
 import com.product.RealestateTokenization.model.*;
 import com.product.RealestateTokenization.repository.TransactionRepo;
 import com.product.RealestateTokenization.service.*;
@@ -35,6 +37,8 @@ public class InvestorController {
     UserService userService;
 
     @Autowired
+    PropertySearchRepository searchRepository;
+    @Autowired
     TransactionRepo transactionRepo;
 
     @Autowired
@@ -51,7 +55,10 @@ public class InvestorController {
         return propertyService.getOnChainProperties();
     }
 
-
+    @GetMapping("/search")
+    public List<PropertySearch> search(@RequestParam String keyword) {
+        return searchRepository.searchAll(keyword);
+    }
 
     @GetMapping("/owner/my-properties")
     public ResponseEntity<List<Property>> getMyProperties() {

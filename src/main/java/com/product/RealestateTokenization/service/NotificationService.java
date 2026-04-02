@@ -30,7 +30,7 @@ public class NotificationService {
                         Notification.builder()
                                 .setTitle(title)
                                 .setBody(body)
-                                .setImage(imageUrl)
+                                .setImage("https://res.cloudinary.com/dpzn0uxzx/image/upload/v1775048418/Screenshot_phairr.png")
                                 .build()
                 )
                 .build();

@@ -2,6 +2,9 @@ package com.product.RealestateTokenization.service;
 
 import com.cloudinary.Cloudinary;
 import com.cloudinary.utils.ObjectUtils;
+import com.product.RealestateTokenization.Elasticsearch.PropertyMapper;
+import com.product.RealestateTokenization.Elasticsearch.PropertySearch;
+import com.product.RealestateTokenization.Elasticsearch.PropertySearchRepository;
 import com.product.RealestateTokenization.model.*;
 import com.product.RealestateTokenization.repository.*;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,6 +29,9 @@ public class PropertyService {
 
     @Autowired
     private Cloudinary cloudinary;
+
+    @Autowired
+    private PropertySearchRepository searchRepository;
 
     public PropertyService(PropertyRepo repo, XrplService xrplService, SpvCompanyRepo spvCompanyRepo, UserRepo userRepo, EnquiryRepo enquiryRepo, ServiceProviderRepo serviceProviderRepo) {
         this.repo = repo;
@@ -187,6 +193,7 @@ public class PropertyService {
 
         // Save first so we have the entity
         p = repo.save(p);
+        searchRepository.save(PropertyMapper.toSearch(p));
 
         // NOW enable rippling from Cold → Hot for this token
         // This runs ONCE per property, safely, and fixes tecPATH_DRY forever
@@ -464,6 +471,7 @@ public Property broadcastSignedIssuance(Long id, String signedTxBlob) throws Exc
         p.setVideoUrls(uploadedVideoUrls);
 
         // 🔹 Save Property
+        searchRepository.save(PropertyMapper.toSearch(p));
         return repo.save(p);
     }
 
@@ -475,7 +483,13 @@ public Property broadcastSignedIssuance(Long id, String signedTxBlob) throws Exc
 
         property.setIslive(!property.isIslive());  // toggle
 
+
+        Property saved = repo.save(property);
+
+        PropertySearch searchDoc = PropertyMapper.toSearch(saved);
+        searchRepository.save(searchDoc);
         return repo.save(property);
     }
+
 
 }

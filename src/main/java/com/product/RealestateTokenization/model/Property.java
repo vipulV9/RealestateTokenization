@@ -102,3 +102,4 @@ public class Property {
         private String email;
     }
 }
+
