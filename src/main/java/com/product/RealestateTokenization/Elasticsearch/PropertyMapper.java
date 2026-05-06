@@ -14,7 +14,6 @@ public class PropertyMapper {
         s.setLocationTitle(p.getLocationTitle());
 
         s.setPropertyValue(p.getPropertyValue());
-        s.setTokenPrice(p.getTokenPrice());
         s.setMonthlyRent(p.getMonthlyRent());
 
         s.setType(p.getType() != null ? p.getType().name() : null);
@@ -22,7 +21,8 @@ public class PropertyMapper {
         s.setFurnished(p.getFurnished() != null ? p.getFurnished().name() : null);
 
         s.setIslive(p.isIslive());
-        s.setApproved(p.getIsApproved());
+        s.setApproved(Boolean.TRUE.equals(p.getIsApproved()));
+
         if (p.getCoordinates() != null) {
             s.setLat(p.getCoordinates().getLat());
             s.setLng(p.getCoordinates().getLng());
@@ -37,6 +37,11 @@ public class PropertyMapper {
         }
 
         s.setPhotoUrls(p.getPhotoUrls());
+
+        s.setSize(p.getSize());
+        s.setSecurity(p.getSecurity());
+
+
 
         return s;
     }

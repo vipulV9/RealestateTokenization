@@ -19,7 +19,7 @@ import java.util.Map;
 
 @Service
 public class PropertyService {
-
+    @Autowired
     private final PropertyRepo repo;
     private final XrplService xrplService;
     private final SpvCompanyRepo spvCompanyRepo;
@@ -202,6 +202,7 @@ public class PropertyService {
         return p;
     }
     public List<Property> getPropertiesByOwnerId(Long ownerId) {
+
         return repo.findByOwnerId(ownerId);
     }
 
@@ -396,7 +397,7 @@ public Property broadcastSignedIssuance(Long id, String signedTxBlob) throws Exc
         p.setType(req.type());
         p.setFurnished(req.furnished());
         p.setState(PropertyState.NORMAL);   // Force NORMAL
-        p.setIslive(false);                 // Admin must approve
+        p.setIslive(true);                 // Admin must approve
         p.setStatus("CREATED");
 
         // 🔹 Link Owner (Platform User)

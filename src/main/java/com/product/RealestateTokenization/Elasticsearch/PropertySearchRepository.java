@@ -17,7 +17,7 @@ public interface PropertySearchRepository extends ElasticsearchRepository<Proper
       {
         "multi_match": {
           "query": "?0",
-          "fields": ["name", "about", "locationTitle"],
+          "fields": ["name", "about", "locationTitle", "monthlyRent", "type"],
           "fuzziness": "AUTO"
         }
       }

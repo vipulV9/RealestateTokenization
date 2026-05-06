@@ -1,7 +1,7 @@
 package com.product.RealestateTokenization.Elasticsearch;
 
+import jakarta.persistence.Id;
 import lombok.Data;
-import org.springframework.data.annotation.Id;
 import org.springframework.data.elasticsearch.annotations.Document;
 
 import java.util.List;
@@ -18,7 +18,6 @@ public class PropertySearch {
     private String locationTitle;
 
     private double propertyValue;
-    private double tokenPrice;
     private double monthlyRent;
 
     private String type;
@@ -33,6 +32,10 @@ public class PropertySearch {
 
     private List<String> roomTypes;
 
-    private List<String> photoUrls;
-}
 
+    private List<String> photoUrls;
+
+    private double size;
+    private double security;
+
+}
